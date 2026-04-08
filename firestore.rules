@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+       return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+       return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "migosking706@gmail.com" && request.auth.token.email_verified == true) ||
+          request.auth.token.email == "admin@storystudio.app");
+    }
+
+    function isAuthor() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'author';
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'authorStatus']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['admin', 'author', 'user'] &&
+             data.authorStatus in ['none', 'pending', 'approved'];
+    }
+
+    function isValidStory(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'title', 'content', 'status', 'safetyStatus']) &&
+             data.authorId is string &&
+             data.authorName is string &&
+             data.title is string && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 50000 &&
+             data.status in ['draft', 'pending', 'approved', 'rejected'] &&
+             data.safetyStatus in ['unchecked', 'safe', 'flagged'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      
+      allow create: if isAuthenticated() && 
+                    isOwner(userId) && 
+                    isValidUser(request.resource.data) && 
+                    request.resource.data.uid == userId &&
+                    ((request.resource.data.role == 'user' && request.resource.data.authorStatus == 'none') || isAdmin());
+                    
+      allow update: if isAuthenticated() && 
+                    isValidUser(request.resource.data) && 
+                    request.resource.data.uid == resource.data.uid &&
+                    (
+                      isAdmin() || 
+                      (isOwner(userId) && 
+                       request.resource.data.role == resource.data.role && // Users cannot change their own role
+                       (request.resource.data.authorStatus == resource.data.authorStatus || request.resource.data.authorStatus == 'pending') // Users can only request to be an author
+                      )
+                    );
+                    
+      match /history/{historyId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+
+    match /stories/{storyId} {
+      // Anyone can read approved stories. Admins and the author can read any status.
+      allow read: if resource.data.status == 'approved' || 
+                  (isAuthenticated() && (isAdmin() || resource.data.authorId == request.auth.uid));
+      
+      // Only authors and admins can create stories
+      allow create: if isAuthenticated() && 
+                    (isAuthor() || isAdmin()) &&
+                    isValidStory(request.resource.data) &&
+                    request.resource.data.authorId == request.auth.uid;
+                    
+      // Authors can update their own stories, admins can update any story
+      allow update: if isAuthenticated() && 
+                    isValidStory(request.resource.data) &&
+                    request.resource.data.authorId == resource.data.authorId && // Cannot change author
+                    (
+                      isAdmin() || 
+                      (isOwner(resource.data.authorId) && isAuthor())
+                    );
+                    
+      allow delete: if isAuthenticated() && (isAdmin() || isOwner(resource.data.authorId));
+    }
+  }
+}
