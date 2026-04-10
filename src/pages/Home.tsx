@@ -1,8 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import { BookOpen, Headphones, Search, Filter, X } from 'lucide-react';
+import { db, auth } from '../firebase';
+import { BookOpen, Headphones, Search, Filter, X, Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../App';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 const GENRES = ['All', 'Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Education', 'Comedy', 'Horror'];
 
@@ -13,6 +64,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [readingStory, setReadingStory] = useState<any | null>(null);
+  const [savedStoryIds, setSavedStoryIds] = useState<Set<string>>(new Set());
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -29,14 +82,28 @@ export default function Home() {
         setLoading(false);
       }
     };
+
+    const fetchSavedStories = async () => {
+      if (!user) return;
+      const path = `users/${user.uid}/savedStories`;
+      try {
+        const snapshot = await getDocs(collection(db, path));
+        setSavedStoryIds(new Set(snapshot.docs.map(doc => doc.id)));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    };
+
     fetchStories();
-  }, []);
+    fetchSavedStories();
+  }, [user]);
 
   const handleReadStory = async (story: any) => {
     setReadingStory(story);
     if (user) {
+      const path = `users/${user.uid}/history/${story.id}`;
       try {
-        await setDoc(doc(db, 'users', user.uid, 'history', story.id), {
+        await setDoc(doc(db, path), {
           title: story.title,
           authorName: story.authorName,
           genre: story.genre,
@@ -44,8 +111,26 @@ export default function Home() {
           viewedAt: serverTimestamp()
         });
       } catch (error) {
-        console.error("Error logging history:", error);
+        handleFirestoreError(error, OperationType.WRITE, path);
       }
+    }
+  };
+
+  const handleSaveStory = async (story: any) => {
+    if (!user) return;
+    setSavingId(story.id);
+    const path = `users/${user.uid}/savedStories/${story.id}`;
+    try {
+      await setDoc(doc(db, path), {
+        ...story,
+        savedAt: serverTimestamp()
+      });
+      
+      setSavedStoryIds(prev => new Set(prev).add(story.id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -122,9 +207,31 @@ export default function Home() {
                 </div>
               )}
               <div className="p-6 flex-1 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">{story.genre}</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{story.mood}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">{story.genre}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{story.mood}</span>
+                  </div>
+                  {user && (
+                    <button 
+                      onClick={() => handleSaveStory(story)}
+                      disabled={savingId === story.id}
+                      className={`p-2 rounded-full transition-colors ${
+                        savedStoryIds.has(story.id) 
+                          ? 'text-emerald-600 bg-emerald-50' 
+                          : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'
+                      }`}
+                      title={savedStoryIds.has(story.id) ? "Saved" : "Save for Later"}
+                    >
+                      {savingId === story.id ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : savedStoryIds.has(story.id) ? (
+                        <BookmarkCheck size={18} />
+                      ) : (
+                        <Bookmark size={18} />
+                      )}
+                    </button>
+                  )}
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 mb-2 line-clamp-2">{story.title}</h3>
                 <p className="text-sm text-slate-500 mb-4 font-medium">By {story.authorName}</p>

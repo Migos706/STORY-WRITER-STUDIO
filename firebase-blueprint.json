@@ -42,6 +42,10 @@
     "/stories/{storyId}": {
       "schema": { "$ref": "#/entities/Story" },
       "description": "Stores stories created by authors."
+    },
+    "/users/{userId}/savedStories/{storyId}": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "Stories saved by the user for later reading."
     }
   }
 }

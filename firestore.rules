@@ -76,6 +76,10 @@ service cloud.firestore {
       match /history/{historyId} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
+
+      match /savedStories/{storyId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
     }
 
     match /stories/{storyId} {

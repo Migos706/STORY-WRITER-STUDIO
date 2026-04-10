@@ -3,7 +3,7 @@ import { useAuth } from '../App';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { GoogleGenAI } from '@google/genai';
-import { Shield, Users, BookOpen, Check, X, AlertTriangle, Loader2, Lock, Filter, BarChart3, PenTool } from 'lucide-react';
+import { Shield, Users, BookOpen, Check, X, AlertTriangle, Loader2, Lock, Filter, BarChart3, PenTool, Sparkles } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import AuthorPanel from './AuthorPanel';
 
@@ -224,7 +224,7 @@ export default function AdminPanel() {
             onClick={() => setActiveTab('write')}
             className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'write' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
           >
-            <PenTool size={16} /> Write Story
+            <Sparkles size={16} /> AI Story Writer
           </button>
         </div>
       </div>

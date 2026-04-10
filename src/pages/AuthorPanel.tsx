@@ -2,9 +2,60 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../App';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, auth } from '../firebase';
 import { GoogleGenAI, Modality } from '@google/genai';
-import { Loader2, Image as ImageIcon, Mic, Send, BookOpen, CheckCircle2, Upload } from 'lucide-react';
+import { Loader2, Image as ImageIcon, Mic, Send, BookOpen, CheckCircle2, Upload, Globe, Shield } from 'lucide-react';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -68,14 +119,16 @@ export default function AuthorPanel() {
   
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (profile?.role !== 'author' && profile?.role !== 'admin') {
-    return <div className="text-center p-12 text-red-600">You do not have permission to view this page.</div>;
-  }
+  // If user is not author or admin, they can still use the AI writer but not publish directly
+  const canPublish = profile?.role === 'author' || profile?.role === 'admin';
+
+  if (!profile) return null;
 
   const handleGenerateImage = async () => {
     if (!title || !content) {
@@ -103,6 +156,35 @@ export default function AuthorPanel() {
       setMessage({ type: 'error', text: 'Failed to generate image: ' + error.message });
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleGenerateRealWorldStory = async () => {
+    setIsGeneratingStory(true);
+    setMessage(null);
+    try {
+      const prompt = `Search the web for a fascinating recent news event, scientific discovery, or interesting real-world fact. Then, write a creative short story based on this real information. 
+      Reply strictly with a JSON object in this format: {"title": "Story Title", "content": "The story content..."}`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
+      
+      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
+      const result = JSON.parse(text);
+      
+      if (result.title) setTitle(result.title);
+      if (result.content) setContent(result.content);
+      setMessage({ type: 'success', text: 'Generated a story based on real-world information!' });
+    } catch (error: any) {
+      console.error(error);
+      setMessage({ type: 'error', text: 'Failed to generate story: ' + error.message });
+    } finally {
+      setIsGeneratingStory(false);
     }
   };
 
@@ -143,8 +225,11 @@ export default function AuthorPanel() {
         // To stay within limits, we'll just use the base64 string directly if it's small enough, or simulate it.
         // Actually, storing base64 audio in Firestore is risky due to 1MB limit.
         // Let's store it as a data URL for simplicity in this prototype.
-        const dataUrl = `data:audio/wav;base64,${btoa(String.fromCharCode(...new Uint8Array(wavBlob.arrayBuffer ? await wavBlob.arrayBuffer() : bytes.buffer)))}`;
-        setAudioUrl(dataUrl);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setAudioUrl(reader.result as string);
+        };
+        reader.readAsDataURL(wavBlob);
       }
     } catch (error: any) {
       console.error(error);
@@ -167,6 +252,19 @@ export default function AuthorPanel() {
     }
   };
 
+  const uploadBase64ToStorage = async (dataUrl: string, path: string) => {
+    try {
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, blob);
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      console.error("Failed to upload base64 to storage", error);
+      return dataUrl; // fallback, though it might fail Firestore limits if too large
+    }
+  };
+
   const handleSubmit = async () => {
     if (!title || !content) {
       setMessage({ type: 'error', text: 'Title and content are required.' });
@@ -176,6 +274,12 @@ export default function AuthorPanel() {
     setMessage(null);
     try {
       let finalAudioUrl = audioUrl;
+      let finalImageUrl = imageUrl;
+
+      // Upload generated image to Storage if it's a base64 data URL
+      if (imageUrl && imageUrl.startsWith('data:image')) {
+        finalImageUrl = await uploadBase64ToStorage(imageUrl, `images/${profile.uid}/${Date.now()}_cover.png`);
+      }
 
       // If they uploaded a file, try to upload to Firebase Storage
       if (audioFile) {
@@ -192,22 +296,54 @@ export default function AuthorPanel() {
             reader.readAsDataURL(audioFile);
           });
         }
+      } else if (audioUrl && audioUrl.startsWith('data:audio')) {
+        // Upload generated audio to Storage if it's a base64 data URL
+        finalAudioUrl = await uploadBase64ToStorage(audioUrl, `audio/${profile.uid}/${Date.now()}_generated.wav`);
       }
 
-      await addDoc(collection(db, 'stories'), {
-        authorId: profile.uid,
-        authorName: profile.displayName,
-        title,
-        content,
-        genre,
-        mood,
-        imageUrl: imageUrl || '',
-        audioUrl: finalAudioUrl || '',
-        status: profile.role === 'admin' ? 'approved' : 'pending', // Auto-approve for admins
-        safetyStatus: 'unchecked',
-        createdAt: new Date().toISOString()
-      });
-      setMessage({ type: 'success', text: profile.role === 'admin' ? 'Story published successfully!' : 'Story submitted successfully for review!' });
+      if (canPublish) {
+        const path = 'stories';
+        try {
+          await addDoc(collection(db, path), {
+            authorId: profile.uid,
+            authorName: profile.displayName,
+            title,
+            content,
+            genre,
+            mood,
+            imageUrl: finalImageUrl || '',
+            audioUrl: finalAudioUrl || '',
+            status: profile.role === 'admin' ? 'approved' : 'pending', // Auto-approve for admins
+            safetyStatus: 'unchecked',
+            createdAt: new Date().toISOString()
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, path);
+        }
+        setMessage({ type: 'success', text: profile.role === 'admin' ? 'Story published successfully!' : 'Story submitted successfully for review!' });
+      } else {
+        // Regular users save to their personal collection
+        const path = `users/${profile.uid}/savedStories`;
+        try {
+          await addDoc(collection(db, path), {
+            authorId: profile.uid,
+            authorName: profile.displayName,
+            title,
+            content,
+            genre,
+            mood,
+            imageUrl: finalImageUrl || '',
+            audioUrl: finalAudioUrl || '',
+            status: 'draft',
+            safetyStatus: 'unchecked',
+            createdAt: new Date().toISOString(),
+            savedAt: new Date().toISOString()
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, path);
+        }
+        setMessage({ type: 'success', text: 'Story saved to your "Saved Stories" section!' });
+      }
       setTitle('');
       setContent('');
       setImageUrl(null);
@@ -224,8 +360,18 @@ export default function AuthorPanel() {
   return (
     <div className="max-w-4xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
       <h1 className="text-3xl font-bold text-slate-900 mb-8 flex items-center gap-2">
-        <BookOpen className="text-indigo-600" /> Create New Story
+        {canPublish ? <BookOpen className="text-indigo-600" /> : <Mic className="text-indigo-600" />}
+        {canPublish ? 'Create New Story' : 'AI Story Writer'}
       </h1>
+
+      {!canPublish && (
+        <div className="mb-8 p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-800 text-sm">
+          <p className="font-bold mb-1 flex items-center gap-2">
+            <Shield size={16} /> Personal AI Writer Mode
+          </p>
+          <p>You can use this tool to generate stories for yourself. They will be saved to your "Saved Stories" section. To publish stories for everyone to see, please apply for Author status in your profile.</p>
+        </div>
+      )}
 
       {message && (
         <div className={`p-4 mb-6 rounded-xl font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -234,6 +380,21 @@ export default function AuthorPanel() {
       )}
 
       <div className="space-y-6">
+        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-indigo-900">Real-World Inspiration</h3>
+            <p className="text-sm text-indigo-700">Use AI connected to the live internet to generate a story based on real, current events or facts.</p>
+          </div>
+          <button 
+            onClick={handleGenerateRealWorldStory}
+            disabled={isGeneratingStory}
+            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-2 text-sm"
+          >
+            {isGeneratingStory ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+            Generate Real-World Story
+          </button>
+        </div>
+
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-2">Title</label>
           <input 
@@ -371,7 +532,7 @@ export default function AuthorPanel() {
             className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-xl font-bold text-lg transition-colors shadow-lg shadow-indigo-600/20"
           >
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
-            Submit for Review
+            {isSubmitting ? 'Submitting...' : (canPublish ? (profile.role === 'admin' ? 'Publish Story' : 'Submit for Review') : 'Save to My Stories')}
           </button>
         </div>
       </div>
