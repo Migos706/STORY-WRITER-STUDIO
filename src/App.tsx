@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Loader2, BookOpen, User, Shield, LogOut, LogIn } from 'lucide-react';
+import { Loader2, BookOpen, User, Shield, LogOut, LogIn, Moon, Sun } from 'lucide-react';
 
 import Home from './pages/Home';
 import UserPanel from './pages/UserPanel';
@@ -34,6 +34,8 @@ interface AuthContextType {
   loading: boolean;
   logOut: () => Promise<void>;
   openAuthModal: () => void;
+  darkMode: boolean;
+  toggleDarkMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -49,6 +51,26 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   useEffect(() => {
     let unsubSnapshot: (() => void) | null = null;
@@ -106,7 +128,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const openAuthModal = () => setIsAuthModalOpen(true);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, logOut, openAuthModal }}>
+    <AuthContext.Provider value={{ user, profile, loading, logOut, openAuthModal, darkMode, toggleDarkMode }}>
       {children}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </AuthContext.Provider>
@@ -115,42 +137,49 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 // --- Layout Component ---
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, profile, logOut, openAuthModal } = useAuth();
+  const { user, profile, logOut, openAuthModal, darkMode, toggleDarkMode } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col transition-colors duration-300">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 text-indigo-600 font-bold text-xl">
+          <Link to="/" className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xl">
             <BookOpen size={24} />
             Story Studio
           </Link>
           <nav className="flex items-center gap-4">
+            <button 
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             {user && profile ? (
               <>
-                <Link to="/user" className="text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1">
-                  <User size={18} /> Panel
+                <Link to="/user" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold flex items-center gap-1.5 transition-colors">
+                  <User size={18} /> Profaili
                 </Link>
                 {profile.role === 'author' && (
-                  <Link to="/author" className="text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1">
-                    <BookOpen size={18} /> Author
+                  <Link to="/author" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold flex items-center gap-1.5 transition-colors">
+                    <BookOpen size={18} /> Mwandishi
                   </Link>
                 )}
                 {profile.role === 'admin' && (
-                  <Link to="/admin" className="text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1">
+                  <Link to="/admin" className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold flex items-center gap-1.5 transition-colors">
                     <Shield size={18} /> Admin
                   </Link>
                 )}
-                <button onClick={logOut} className="text-slate-500 hover:text-red-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
+                <button onClick={logOut} className="text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-90" title="Ondoka">
                   <LogOut size={20} />
                 </button>
               </>
             ) : (
               <button 
                 onClick={openAuthModal} 
-                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
               >
-                <LogIn size={18} /> Sign In
+                <LogIn size={18} /> Ingia Sasa
               </button>
             )}
           </nav>

@@ -59,15 +59,15 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Education', 'Comedy', 'Horror'];
-const MOODS = ['Happy', 'Sad', 'Suspenseful', 'Calm', 'Energetic', 'Romantic', 'Dark', 'Mystical'];
-const NARRATION_STYLES = ['First Person (I)', 'Third Person Limited (He/She)', 'Third Person Omniscient', 'Epistolary (Letters/Journal)', 'Poetic/Lyric'];
+const GENRES = ['Njozi (Fantasy)', 'Sayansi (Sci-Fi)', 'Mahaba (Romance)', 'Siri (Mystery)', 'Elimu (Education)', 'Vichekesho (Comedy)', 'Kutisha (Horror)'];
+const MOODS = ['Furaha', 'Huzuni', 'Hamasa', 'Utulivu', 'Changamfu', 'Kivutio', 'Giza', 'Linalovutia'];
+const NARRATION_STYLES = ['Nafasi ya Kwanza (Mimi)', 'Nafasi ya Tatu (Yeye)', 'Msimulizi Anayejua Yote', 'Jarida (Letters/Journal)', 'Kishairi (Poetic)'];
 const VOICES = [
-  { id: 'Charon', label: 'News Anchor', description: 'Authoritative and clear' },
-  { id: 'Kore', label: 'Calm Voice', description: 'Soothing and relaxed' },
-  { id: 'Fenrir', label: 'Energetic Announcer', description: 'Upbeat and dynamic' },
-  { id: 'Zephyr', label: 'Storyteller', description: 'Expressive and engaging' },
-  { id: 'Puck', label: 'Friendly Host', description: 'Warm and conversational' },
+  { id: 'Charon', label: 'Msemaji wa Habari', description: 'Sauti yenye mamlaka' },
+  { id: 'Kore', label: 'Sauti ya Utulivu', description: 'Inatuliza na kupumzisha' },
+  { id: 'Fenrir', label: 'Mwasilishaji Hamasa', description: 'Sauti changamfu' },
+  { id: 'Zephyr', label: 'Msimulizi', description: 'Sauti inayovutia na kuelezea' },
+  { id: 'Puck', label: 'Mwenyeji Rafiki', description: 'Sauti ya kirafiki na mazungumzo' },
 ];
 
 function createWavBlob(pcmData: Int16Array, sampleRate: number): Blob {
@@ -141,7 +141,7 @@ export default function AuthorPanel() {
     setIsGeneratingImage(true);
     setMessage(null);
     try {
-      const prompt = `A beautiful cover illustration for a story titled "${title}". Genre: ${genre}. Mood: ${mood}. Story context: ${content.substring(0, 200)}...`;
+      const prompt = `Immerse yourself as a world-class novelist. Use Swahili if possible or deep English. Title: ${title}. Genre: ${genre}. Mood: ${mood}. Context: ${content.substring(0, 200)}...`;
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: prompt }] },
@@ -202,10 +202,10 @@ export default function AuthorPanel() {
       
       if (result.title) setTitle(result.title);
       if (result.content) setContent(result.content);
-      setMessage({ type: 'success', text: 'AI has crafted an expansive story! Review and edit it below.' });
+      setMessage({ type: 'success', text: 'AI amekamilisha kuandika hadithi! Ipungue na kuiboresha hapa chini.' });
     } catch (error: any) {
       console.error(error);
-      setMessage({ type: 'error', text: 'Failed to generate story: ' + error.message });
+      setMessage({ type: 'error', text: 'Imeshindwa kutengeneza hadithi: ' + error.message });
     } finally {
       setIsGeneratingStory(false);
     }
@@ -213,7 +213,7 @@ export default function AuthorPanel() {
 
   const handleExpandStory = async () => {
     if (!content) {
-      setMessage({ type: 'error', text: 'Please generate or write some content first.' });
+      setMessage({ type: 'error', text: 'Tadhali tengeneza au andika maudhui kwanza.' });
       return;
     }
     setIsGeneratingStory(true);
@@ -244,11 +244,11 @@ export default function AuthorPanel() {
       
       if (result.content) {
         setContent(prev => prev + "\n\n" + result.content);
-        setMessage({ type: 'success', text: 'AI has expanded your story with more chapters and details!' });
+        setMessage({ type: 'success', text: 'AI amepanua hadithi yako na kuongeza maelezo zaidi!' });
       }
     } catch (error: any) {
       console.error(error);
-      setMessage({ type: 'error', text: 'Failed to expand story: ' + error.message });
+      setMessage({ type: 'error', text: 'Imeshindwa kupanua hadithi: ' + error.message });
     } finally {
       setIsGeneratingStory(false);
     }
@@ -453,18 +453,20 @@ export default function AuthorPanel() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-      <h1 className="text-3xl font-bold text-slate-900 mb-8 flex items-center gap-2">
-        {canPublish ? <BookOpen className="text-indigo-600" /> : <Mic className="text-indigo-600" />}
-        {canPublish ? 'Create New Story' : 'AI Story Writer'}
+    <div className="max-w-4xl mx-auto bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors animate-in fade-in duration-500">
+      <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-10 flex items-center gap-4">
+        <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-600/20">
+          {canPublish ? <BookOpen size={32} /> : <Mic size={32} />}
+        </div>
+        {canPublish ? 'Tunga Hadithi Mpya' : 'AI Story Writer'}
       </h1>
 
       {!canPublish && (
-        <div className="mb-8 p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-800 text-sm">
-          <p className="font-bold mb-1 flex items-center gap-2">
-            <Shield size={16} /> Personal AI Writer Mode
+        <div className="mb-10 p-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-[1.5rem] text-amber-800 dark:text-amber-300">
+          <p className="font-black mb-2 flex items-center gap-2 text-lg">
+            <Shield size={20} /> Huduma ya Maandishi ya AI
           </p>
-          <p>You can use this tool to generate stories for yourself. They will be saved to your "Saved Stories" section. To publish stories for everyone to see, please apply for Author status in your profile.</p>
+          <p className="leading-relaxed">Unaweza kutumia injini ya AI kutengeneza hadishi zako binafsi. Hadithi hizi zitahifadhiwa kwenye maktaba yako ya "Saved Stories". Ikiwa unataka kuchapisha hadithi kwa wasomaji wote, tafadhali omba ruhusa ya kuwa Mwandishi (Author) kwenye profaili yako.</p>
         </div>
       )}
 
@@ -475,90 +477,92 @@ export default function AuthorPanel() {
       )}
 
       <div className="space-y-6">
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-3xl border border-indigo-100 space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Send className="text-indigo-600" size={20} />
-            <h3 className="font-bold text-indigo-900 text-lg">AI Story Generator</h3>
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-950 dark:to-indigo-950/20 p-8 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/40 space-y-6 shadow-inner transition-colors">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+              <Send size={24} />
+            </div>
+            <h3 className="font-black text-indigo-900 dark:text-indigo-300 text-xl">AI Story Generator</h3>
           </div>
           
           <div>
-            <label className="block text-sm font-bold text-indigo-700 mb-2">What is your story about? (Intent/Plot)</label>
+            <label className="block text-sm font-black text-indigo-700 dark:text-indigo-400 mb-3 uppercase tracking-widest">Hadithi yako inahusu nini? (Dhumuni/Wazo)</label>
             <textarea 
               value={storyPrompt}
               onChange={(e) => setStoryPrompt(e.target.value)}
-              className="w-full p-4 bg-white/80 border border-indigo-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
-              placeholder="e.g. A young girl discovers a hidden door in her library that leads to a world where books are alive..."
+              className="w-full p-5 bg-white/90 dark:bg-slate-900/90 border border-indigo-200 dark:border-indigo-900/40 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-32 dark:text-white text-lg transition-all"
+              placeholder="Mfano: Hadithi ya kijana anayegundua siri ya zamani iliyojificha kwenye msitu wa giza..."
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
             <button 
               onClick={handleGenerateAIStory}
               disabled={isGeneratingStory}
-              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 active:scale-95"
             >
-              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <BookOpen size={18} />}
-              Write My Full Story (Master AI)
+              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <BookOpen size={24} />}
+              Andika Hadithi Kamili (Master AI)
             </button>
             <button 
               onClick={handleExpandStory}
               disabled={isGeneratingStory || !content}
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
-              title="Add more chapters and depth to the current story"
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-amber-600/20 flex items-center justify-center gap-2 active:scale-95"
+              title="Ongeza sura mpya na undani zaidi"
             >
-              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-              Expand Story (Add More)
+              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
+              Panua Hadithi (Expand)
             </button>
             <button 
               onClick={handleGenerateRealWorldStory}
               disabled={isGeneratingStory}
-              className="w-full sm:w-auto bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/40 px-8 py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 active:scale-95"
             >
-              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <Globe size={18} />}
-              Daily Inspiration (Facts)
+              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <Globe size={24} />}
+              Daily Inspiration
             </button>
           </div>
-          <p className="text-xs text-indigo-500 italic">Advanced Literary Engine (Gemini 3.1 Pro) enabled: Designed for multi-page, deep narrative creation.</p>
+          <p className="text-xs text-indigo-500 dark:text-indigo-400/60 italic font-medium">Inatumia teknolojia ya kisasa ya Maandishi ya Gemini 3.1 Pro kwa matokeo bora zaidi.</p>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-slate-700 mb-2">Title</label>
+          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Kichwa cha Hadithi (Title)</label>
           <input 
             type="text" 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder="Enter story title..."
+            className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-xl font-bold dark:text-white transition-colors"
+            placeholder="Weka jina la hadithi..."
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Genre</label>
+            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Aina (Genre)</label>
             <select 
               value={genre}
               onChange={(e) => setGenre(e.target.value)}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
             >
               {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Mood</label>
+            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Mood</label>
             <select 
               value={mood}
               onChange={(e) => setMood(e.target.value)}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
             >
               {MOODS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Narration Style</label>
+            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Style</label>
             <select 
               value={narrationStyle}
               onChange={(e) => setNarrationStyle(e.target.value)}
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
             >
               {NARRATION_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -566,42 +570,42 @@ export default function AuthorPanel() {
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-slate-700 mb-2">Content</label>
+          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">Maudhui (Content)</label>
           <textarea 
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full h-64 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-            placeholder="Write your story here..."
+            className="w-full h-80 p-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2rem] focus:ring-2 focus:ring-indigo-500 outline-none resize-none dark:text-white text-xl font-serif leading-relaxed transition-colors scrollbar-thin dark:scrollbar-thumb-slate-700"
+            placeholder="Andika hadithi yako hapa..."
           />
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-            <Mic size={18} className="text-indigo-500" />
-            Select Narration Voice (If Generating)
+          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-widest">
+            <Mic size={20} className="text-indigo-500" />
+            Sauti ya Masimulizi (Narration)
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {VOICES.map((voice) => {
               const isSelected = selectedVoice === voice.id;
               return (
                 <button
                   key={voice.id}
                   onClick={() => setSelectedVoice(voice.id)}
-                  className={`text-left p-4 rounded-xl border-2 transition-all relative overflow-hidden ${
+                  className={`text-left p-5 rounded-2xl border-2 transition-all relative overflow-hidden group ${
                     isSelected 
-                      ? 'border-indigo-600 bg-indigo-50 shadow-sm' 
-                      : 'border-slate-100 hover:border-indigo-200 hover:bg-slate-50'
+                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 shadow-md ring-2 ring-indigo-500/10' 
+                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   {isSelected && (
-                    <div className="absolute top-3 right-3 text-indigo-600">
-                      <CheckCircle2 size={18} />
+                    <div className="absolute top-4 right-4 text-indigo-600 dark:text-indigo-400">
+                      <CheckCircle2 size={20} />
                     </div>
                   )}
-                  <div className={`font-bold mb-1 ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
+                  <div className={`font-black mb-1 text-lg ${isSelected ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-300'}`}>
                     {voice.label}
                   </div>
-                  <div className={`text-xs ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>
+                  <div className={`text-xs font-bold ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>
                     {voice.description}
                   </div>
                 </button>
@@ -610,41 +614,41 @@ export default function AuthorPanel() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-100 dark:border-slate-800">
           {/* Image Generation */}
           <div className="space-y-4">
             <button 
               onClick={handleGenerateImage}
               disabled={isGeneratingImage}
-              className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold transition-colors"
+              className="w-full flex items-center justify-center gap-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-4 rounded-2xl font-black transition-all active:scale-95"
             >
-              {isGeneratingImage ? <Loader2 className="animate-spin" /> : <ImageIcon />}
-              Generate Cover Image
+              {isGeneratingImage ? <Loader2 size={24} className="animate-spin" /> : <ImageIcon size={24} />}
+              Tengeneza Picha ya Jalada
             </button>
             {imageUrl && (
-              <img src={imageUrl} alt="Generated Cover" className="w-full h-48 object-cover rounded-xl border border-slate-200" />
+              <img src={imageUrl} alt="Generated Cover" className="w-full h-64 object-cover rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-lg animate-in fade-in duration-500" />
             )}
           </div>
 
           {/* Audio Generation / Upload */}
           <div className="space-y-4">
-            <label className="block text-sm font-bold text-slate-700 mb-1">Story Audio (Narration)</label>
-            <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-2xl space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
+            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-widest">Sauti (Audio Narration)</label>
+            <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-2 border-dashed border-slate-300 dark:border-slate-800 space-y-6 transition-colors">
+              <div className="flex flex-col gap-4">
                 <button 
                   onClick={handleGenerateAudio}
                   disabled={isGeneratingAudio}
-                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm border border-indigo-200"
+                  className="w-full flex items-center justify-center gap-3 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-6 py-4 rounded-2xl font-black transition-all text-sm border border-indigo-200 dark:border-indigo-900/30 shadow-sm active:scale-95"
                 >
-                  {isGeneratingAudio ? <Loader2 className="animate-spin" size={18} /> : <Mic size={18} />}
-                  Generate AI Voice
+                  {isGeneratingAudio ? <Loader2 size={20} className="animate-spin" /> : <Mic size={20} />}
+                  Tengeneza Sauti ya AI
                 </button>
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm border border-slate-200 shadow-sm"
+                  className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-6 py-4 rounded-2xl font-black transition-all text-sm border border-slate-200 dark:border-slate-800 shadow-sm active:scale-95"
                 >
-                  <Upload size={18} className="text-indigo-600" />
-                  Upload Audio File
+                  <Upload size={20} className="text-indigo-600 dark:text-indigo-400" />
+                  Pakia Sauti (Upload)
                 </button>
                 <input 
                   type="file" 
@@ -656,31 +660,30 @@ export default function AuthorPanel() {
               </div>
               
               {audioUrl ? (
-                <div className="space-y-3 p-3 bg-white rounded-xl border border-slate-100 shadow-inner">
+                <div className="space-y-3 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Audio Preview</span>
-                    {audioFile && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">Uploaded</span>}
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sikiliza Preview</span>
+                    {audioFile && <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-3 py-1 rounded-full font-black">Uploaded</span>}
                   </div>
-                  <audio controls src={audioUrl} className="w-full h-10" />
-                  {audioFile && <p className="text-[10px] text-center text-slate-400">File: {audioFile.name}</p>}
+                  <audio controls src={audioUrl} className="w-full h-12" />
                 </div>
               ) : (
-                <div className="py-4 text-center">
-                  <p className="text-xs text-slate-400">No audio added yet. Generate one with AI or upload your own narration.</p>
+                <div className="py-6 text-center">
+                  <p className="text-xs text-slate-400 dark:text-slate-600 font-bold">Hakuna sauti. Tengeneza na AI au pakia faili lako.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="pt-8">
+        <div className="pt-10">
           <button 
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-xl font-bold text-lg transition-colors shadow-lg shadow-indigo-600/20"
+            className="w-full flex items-center justify-center gap-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white px-10 py-5 rounded-[1.5rem] font-black text-xl transition-all shadow-2xl shadow-indigo-600/30 active:scale-95"
           >
-            {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
-            {isSubmitting ? 'Submitting...' : (canPublish ? (profile.role === 'admin' ? 'Publish Story' : 'Submit for Review') : 'Save to My Stories')}
+            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
+            {isSubmitting ? 'Inatuma...' : (canPublish ? (profile.role === 'admin' ? 'Chapisha Hadithi' : 'Tuma Uhakiki') : 'Hifadhi kwenye Maktaba')}
           </button>
         </div>
       </div>

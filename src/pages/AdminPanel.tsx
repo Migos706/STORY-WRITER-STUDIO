@@ -126,47 +126,47 @@ export default function AdminPanel() {
 
   if (!isUnlocked) {
     return (
-      <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-3xl shadow-xl border border-slate-200 text-center animate-in fade-in zoom-in duration-300">
-        <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
+      <div className="max-w-md mx-auto mt-12 bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 text-center animate-in fade-in zoom-in duration-300">
+        <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-6">
           <Shield size={40} />
         </div>
-        <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Admin Portal</h2>
-        <p className="text-slate-500 mb-8">Please enter your master credentials to continue.</p>
+        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2">Admin Portal</h2>
+        <p className="text-slate-500 dark:text-slate-400 mb-8">Tafadhali ingiza siri ya msimamizi kuendelea.</p>
         
         {loginError && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold mb-6">
-            Invalid username or password.
+          <div className="bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 p-3 rounded-xl text-sm font-bold mb-6 border border-red-100 dark:border-red-900/40">
+            Jina la mtumiaji au nenosiri si sahihi.
           </div>
         )}
 
         <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Username / Email</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Username / Email</label>
             <input 
               type="text" 
               value={adminUsername}
               onChange={(e) => setAdminUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white transition-colors"
               placeholder="Enter master username"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Password</label>
             <input 
               type="password" 
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white transition-colors"
               placeholder="••••••••"
               required
             />
           </div>
           <button 
             type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 mt-6"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 mt-6 active:scale-95 shadow-lg shadow-indigo-600/20"
           >
-            <Lock size={18} /> Unlock Dashboard
+            <Lock size={18} /> Fungua Dashboard
           </button>
         </form>
       </div>
@@ -197,34 +197,34 @@ export default function AdminPanel() {
   const statusChartData = Object.keys(statusData).map(key => ({ name: key, value: statusData[key] }));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-3xl font-extrabold text-slate-900">Admin Dashboard</h1>
+        <h1 className="text-4xl font-black text-slate-900 dark:text-white">Admin Dashboard</h1>
         
-        <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 p-1 overflow-x-auto">
+        <div className="flex bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-1.5 overflow-x-auto transition-colors">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            className={`px-6 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
-            <Shield size={16} /> Overview
+            <Shield size={16} /> Dashibodi
           </button>
           <button 
             onClick={() => setActiveTab('management')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'management' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            className={`px-6 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'management' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
-            <BookOpen size={16} /> Story Management
+            <BookOpen size={16} /> Udhibiti wa Hadithi
           </button>
           <button 
             onClick={() => setActiveTab('insights')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'insights' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            className={`px-6 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'insights' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
-            <BarChart3 size={16} /> Insights
+            <BarChart3 size={16} /> Takwimu
           </button>
           <button 
             onClick={() => setActiveTab('write')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'write' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            className={`px-6 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'write' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
-            <Sparkles size={16} /> AI Story Writer
+            <Sparkles size={16} /> Mwandishi AI
           </button>
         </div>
       </div>
@@ -232,84 +232,84 @@ export default function AdminPanel() {
       {activeTab === 'dashboard' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
-                <Users size={32} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-6 transition-colors">
+              <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center shadow-inner">
+                <Users size={36} />
               </div>
               <div>
-                <p className="text-slate-500 font-medium">Total Users</p>
-                <p className="text-3xl font-bold text-slate-900">{stats.users}</p>
+                <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs">Jumla ya Watumiaji</p>
+                <p className="text-4xl font-black text-slate-900 dark:text-white">{stats.users}</p>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
-                <BookOpen size={32} />
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 flex items-center gap-6 transition-colors">
+              <div className="w-20 h-20 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-3xl flex items-center justify-center shadow-inner">
+                <BookOpen size={36} />
               </div>
               <div>
-                <p className="text-slate-500 font-medium">Total Stories</p>
-                <p className="text-3xl font-bold text-slate-900">{stats.stories}</p>
+                <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs">Jumla ya Hadithi</p>
+                <p className="text-4xl font-black text-slate-900 dark:text-white">{stats.stories}</p>
               </div>
             </div>
           </div>
 
           {/* Author Requests */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Users className="text-indigo-600" /> Pending Author Requests
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-8 flex items-center gap-3">
+              <Users className="text-indigo-600 dark:text-indigo-400" /> Maombi ya Waandishi Mapya
             </h2>
             
             {pendingAuthors.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
-                No pending author requests.
+              <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 rounded-3xl border border-slate-100 dark:border-slate-800 border-dashed">
+                Hakuna maombi mapya kwa sasa.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {pendingAuthors.map((author) => (
-                  <div key={author.id} className="p-6 rounded-3xl border border-slate-200 bg-white shadow-sm space-y-4">
+                  <div key={author.id} className="p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm space-y-6 hover:border-indigo-200 dark:hover:border-indigo-900/30 transition-all">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-slate-900 text-lg">{author.displayName}</p>
-                        <p className="text-sm text-slate-500">{author.email}</p>
+                        <p className="font-black text-slate-900 dark:text-white text-xl">{author.displayName}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{author.email}</p>
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-1 rounded-md">Pending</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-500 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-900/30">Inasubiri</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Pen Name</p>
-                        <p className="text-sm font-bold text-indigo-600">{author.authorApplication?.pseudonym || 'N/A'}</p>
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Jina la Kalamu</p>
+                        <p className="text-sm font-black text-indigo-600 dark:text-indigo-400">{author.authorApplication?.pseudonym || 'N/A'}</p>
                       </div>
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Author Type</p>
-                        <p className="text-sm font-bold text-slate-700">{author.authorApplication?.authorType || 'N/A'}</p>
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Kundi</p>
+                        <p className="text-sm font-black text-slate-700 dark:text-slate-300">{author.authorApplication?.authorType || 'N/A'}</p>
                       </div>
                     </div>
 
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Statement of Interest / Bio</p>
-                      <p className="text-sm text-slate-600 italic whitespace-pre-line leading-relaxed">
-                        "{author.authorApplication?.bio || 'No bio provided'}"
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Maelezo ya Nia</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 italic whitespace-pre-line leading-relaxed">
+                        "{author.authorApplication?.bio || 'Hajatoa maelezo'}"
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2 text-[10px] text-slate-400 font-medium">
-                      <Check size={12} className={author.authorApplication?.agreedToCompliance ? "text-emerald-500" : "text-red-500"} />
-                      Agreed to Privacy & Terms (No offensive content)
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wide">
+                      <Check size={14} className={author.authorApplication?.agreedToCompliance ? "text-emerald-500" : "text-red-500"} />
+                      Akubali Sheria & Kanuni
                     </div>
 
-                    <div className="flex gap-3 pt-2">
+                    <div className="flex gap-4 pt-2">
                       <button 
                         onClick={() => handleAuthorAction(author.id, 'approved')}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2"
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2 active:scale-95"
                       >
-                        <Check size={18} /> Approve Account
+                        <Check size={18} /> Kubali
                       </button>
                       <button 
                         onClick={() => handleAuthorAction(author.id, 'none')}
-                        className="flex-1 bg-white hover:bg-red-50 text-red-600 border border-red-100 font-bold py-3 px-4 rounded-2xl transition-all text-sm flex items-center justify-center gap-2"
+                        className="flex-1 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30 font-black py-4 px-4 rounded-2xl transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
                       >
-                        <X size={18} /> Reject
+                        <X size={18} /> Kataa
                       </button>
                     </div>
                   </div>
@@ -321,117 +321,119 @@ export default function AdminPanel() {
       )}
 
       {activeTab === 'management' && (
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <BookOpen className="text-indigo-600" /> Story Management
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 animate-in fade-in duration-300 transition-colors">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+              <BookOpen className="text-indigo-600 dark:text-indigo-400" /> Story Management
             </h2>
             
-            <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
               <Filter size={18} className="text-slate-400 ml-2" />
               <select 
                 value={statusFilter} 
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-transparent border-none text-sm font-medium text-slate-700 focus:ring-0 outline-none cursor-pointer"
+                className="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-300 focus:ring-0 outline-none cursor-pointer"
               >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
+                <option value="all">Sura Zote</option>
+                <option value="pending">Zinasubiri</option>
+                <option value="approved">Zilizokubalika</option>
+                <option value="rejected">Zilizokataliwa</option>
               </select>
-              <div className="w-px h-6 bg-slate-300"></div>
+              <div className="w-px h-6 bg-slate-300 dark:bg-slate-700"></div>
               <select 
                 value={safetyFilter} 
                 onChange={(e) => setSafetyFilter(e.target.value)}
-                className="bg-transparent border-none text-sm font-medium text-slate-700 focus:ring-0 outline-none cursor-pointer"
+                className="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-300 focus:ring-0 outline-none cursor-pointer"
               >
-                <option value="all">All Safety</option>
-                <option value="unchecked">Unchecked</option>
-                <option value="safe">Safe</option>
-                <option value="flagged">Flagged</option>
+                <option value="all">Usalama Wote</option>
+                <option value="unchecked">Hazijakaguliwa</option>
+                <option value="safe">Salama</option>
+                <option value="flagged">Yenye Mashaka</option>
               </select>
             </div>
           </div>
           
           {filteredStories.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
-              No stories found matching the selected filters.
+            <div className="text-center py-20 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 rounded-3xl border border-slate-100 dark:border-slate-800 border-dashed">
+              Hakuna hadithi inayolingana na vigezo vilivyochaguliwa.
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {filteredStories.map((story) => (
-                <div key={story.id} className="p-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                <div key={story.id} className="p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all group">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-6">
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900">{story.title}</h3>
-                      <p className="text-sm text-slate-500">By {story.authorName}</p>
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{story.title}</h3>
+                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Na {story.authorName} • {story.genre}</p>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
-                        story.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                        story.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-amber-100 text-amber-700'
+                    <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-3 shrink-0">
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border shadow-sm ${
+                        story.status === 'approved' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30' :
+                        story.status === 'rejected' ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/30' :
+                        'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-500 border-amber-100 dark:border-amber-900/30'
                       }`}>
                         {story.status}
                       </span>
                       
                       {story.safetyStatus === 'unchecked' && (
-                        <span className="text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
-                          Safety: Unchecked
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
+                          Safety: Hazjakaguliwa
                         </span>
                       )}
                       {story.safetyStatus === 'safe' && (
-                        <span className="text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1">
-                          <Check size={12} /> Safe
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-4 py-1.5 rounded-full border border-emerald-100 dark:border-emerald-900/30 flex items-center gap-1.5">
+                          <Check size={12} /> Salama
                         </span>
                       )}
                       {story.safetyStatus === 'flagged' && (
-                        <span className="text-xs font-bold uppercase tracking-wider bg-red-100 text-red-700 px-3 py-1 rounded-full flex items-center gap-1">
-                          <AlertTriangle size={12} /> Flagged
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 px-4 py-1.5 rounded-full border border-red-100 dark:border-red-900/30 flex items-center gap-1.5">
+                          <AlertTriangle size={12} /> Yenye Mashaka
                         </span>
                       )}
                     </div>
                   </div>
                   
-                  <div className="bg-slate-50 p-4 rounded-xl mb-4 max-h-48 overflow-y-auto text-sm text-slate-700 border border-slate-100">
+                  <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl mb-6 max-h-60 overflow-y-auto text-lg text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800 font-serif leading-relaxed italic opacity-80 group-hover:opacity-100 transition-opacity">
                     {story.content}
                   </div>
 
                   {story.safetyReason && story.safetyStatus === 'flagged' && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700 flex items-start gap-2">
-                      <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                      <p><strong>AI Flag:</strong> {story.safetyReason}</p>
+                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-sm text-red-700 dark:text-red-400 flex items-start gap-3">
+                      <AlertTriangle size={20} className="shrink-0" />
+                      <p><strong className="font-black">Sababu ya AI:</strong> {story.safetyReason}</p>
                     </div>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+                  <div className="flex flex-wrap items-center gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
                     <button 
                       onClick={() => runSecurityCheck(story.id, story.content)}
                       disabled={checkingStoryId === story.id}
-                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2 px-4 rounded-xl transition-colors text-sm flex items-center gap-2"
+                      className="bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 font-black py-3 px-6 rounded-2xl transition-all text-sm flex items-center gap-2 active:scale-95 border border-indigo-100 dark:border-indigo-900/30"
                     >
-                      {checkingStoryId === story.id ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
-                      {story.safetyStatus === 'unchecked' ? 'Run AI Security Check' : 'Re-run Security Check'}
+                      {checkingStoryId === story.id ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}
+                      {story.safetyStatus === 'unchecked' ? 'Kagua Usalama (AI)' : 'Kagua Tena (AI)'}
                     </button>
                     
                     <div className="flex-1"></div>
                     
-                    {story.status !== 'approved' && (
-                      <button 
-                        onClick={() => handleStoryAction(story.id, 'approved')}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-xl transition-colors text-sm"
-                      >
-                        Approve
-                      </button>
-                    )}
-                    {story.status !== 'rejected' && (
-                      <button 
-                        onClick={() => handleStoryAction(story.id, 'rejected')}
-                        className="bg-red-50 hover:bg-red-100 text-red-700 font-bold py-2 px-6 rounded-xl transition-colors text-sm"
-                      >
-                        Reject
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {story.status !== 'approved' && (
+                        <button 
+                          onClick={() => handleStoryAction(story.id, 'approved')}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 px-8 rounded-2xl transition-all text-sm shadow-lg shadow-emerald-600/20 active:scale-95"
+                        >
+                          Kubali
+                        </button>
+                      )}
+                      {story.status !== 'rejected' && (
+                        <button 
+                          onClick={() => handleStoryAction(story.id, 'rejected')}
+                          className="bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30 font-black py-3 px-8 rounded-2xl transition-all text-sm active:scale-95"
+                        >
+                          Kataa
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -441,25 +443,25 @@ export default function AdminPanel() {
       )}
 
       {activeTab === 'insights' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">Stories by Genre</h2>
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-8">Hadithi kwa Genre</h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={genreChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="opacity-10" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: '#1e293b', color: '#fff' }} />
+                    <Bar dataKey="value" fill="#4f46e5" radius={[10, 10, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">Story Status Distribution</h2>
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-8">Mgawanyo wa Hali (Status)</h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -469,15 +471,15 @@ export default function AdminPanel() {
                       cy="50%"
                       innerRadius={80}
                       outerRadius={120}
-                      paddingAngle={5}
+                      paddingAngle={8}
                       dataKey="value"
                     >
                       {statusChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} className="stroke-white dark:stroke-slate-900 stroke-2" />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: '#1e293b', color: '#fff' }} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontWeight: 900, fontSize: '10px', paddingTop: '20px', textTransform: 'uppercase' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -487,10 +489,12 @@ export default function AdminPanel() {
       )}
 
       {activeTab === 'write' && (
-        <div className="animate-in fade-in duration-300">
-          <div className="mb-6 bg-indigo-50 border border-indigo-100 p-4 rounded-2xl text-indigo-800 text-sm font-medium flex items-center gap-2">
-            <Shield size={18} />
-            Stories written by admins are automatically approved and published.
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="mb-8 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 p-6 rounded-[1.5rem] text-indigo-800 dark:text-indigo-300 text-sm font-black flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-600/20">
+              <Shield size={20} />
+            </div>
+            Hadithi zinazoandikwa na Wasimamizi (Admins) zinakubaliwa na kuchapishwa moja kwa moja bila uhakiki.
           </div>
           <AuthorPanel />
         </div>

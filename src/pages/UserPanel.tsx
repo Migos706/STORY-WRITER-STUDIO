@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { doc, updateDoc, collection, getDocs, query, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { Link } from 'react-router-dom';
 import { User, BookOpen, Clock, CheckCircle2, Loader2, Bookmark, Sparkles, Trash2, Headphones, X } from 'lucide-react';
 import AuthorPanel from './AuthorPanel';
 
@@ -152,48 +153,54 @@ export default function UserPanel() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8 pb-20">
       {/* Tabs */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-200 w-fit mx-auto">
+      <div className="flex bg-white dark:bg-slate-900 p-2 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 w-fit mx-auto transition-all">
         <button 
           onClick={() => setActiveTab('profile')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-8 py-3.5 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
         >
-          <User size={18} /> Profile
+          <User size={20} /> Profaili
         </button>
         <button 
           onClick={() => setActiveTab('saved')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'saved' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-8 py-3.5 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'saved' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
         >
-          <Bookmark size={18} /> Saved Stories
+          <Bookmark size={20} /> Maktaba Yangu
         </button>
         <button 
           onClick={() => setActiveTab('ai-writer')}
-          className={`px-6 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'ai-writer' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-8 py-3.5 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'ai-writer' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
         >
-          <Sparkles size={18} /> AI Story Writer
+          <Sparkles size={20} /> AI Story Writer
         </button>
       </div>
 
       {activeTab === 'profile' && (
-        <div className="space-y-8 animate-in fade-in duration-300">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-6">
-            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-              <User size={40} />
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center md:items-start gap-8 transition-colors">
+            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-[2rem] flex items-center justify-center shadow-xl shadow-indigo-500/20 shrink-0">
+              <User size={48} />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">{profile.displayName}</h1>
-              <p className="text-slate-500">{profile.email}</p>
-              <div className="mt-2 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
-                Role: {profile.role}
+            <div className="text-center md:text-left">
+              <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-1">{profile.displayName}</h1>
+              <p className="text-lg text-slate-500 dark:text-slate-400 mb-4">{profile.email}</p>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-4 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-900/30">
+                  <User size={12} /> Role: {profile.role}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-4 py-1.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">
+                  <CheckCircle2 size={12} /> Active
+                </span>
               </div>
             </div>
           </div>
 
           {profile.role === 'user' && (
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-              <h2 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <BookOpen className="text-indigo-600" /> Omba Kuwa Mwandishi (Author)
+            <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+                <BookOpen className="text-indigo-600 dark:text-indigo-400" size={32} /> 
+                Kuwa Mwandishi Mashuhuri
               </h2>
               
               {profile.authorStatus === 'none' && (
@@ -202,58 +209,58 @@ export default function UserPanel() {
                     Unataka kuchapisha hadithi zako na kuzishirikisha duniani? Jaza fomu hii ili uweze kuwa mwandishi katika Story Studio.
                   </p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Jina la Kalamu (Pseudonym / Pen Name)</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={appForm.pseudonym}
-                        onChange={e => setAppForm({...appForm, pseudonym: e.target.value})}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                        placeholder="Mtumiaji atakuona kwa jina hili"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Aina ya Mwandishi (Author Type)</label>
-                      <select 
-                        value={appForm.authorType}
-                        onChange={e => setAppForm({...appForm, authorType: e.target.value})}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                      >
-                        <option value="Novelist">Mtunzi wa Hadithi/Riwaya (Novelist)</option>
-                        <option value="Educational">Muelimishaji (Educational)</option>
-                        <option value="Poet">Mshairi (Poet)</option>
-                        <option value="Journalist">Mwandishi wa Habari/Makala</option>
-                      </select>
-                    </div>
+                  <div>
+                    <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Jina la Kalamu (Pseudonym / Pen Name)</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={appForm.pseudonym}
+                      onChange={e => setAppForm({...appForm, pseudonym: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold dark:text-white transition-colors"
+                      placeholder="Mtumiaji atakuona kwa jina hili"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Aina ya Mwandishi (Author Type)</label>
+                    <select 
+                      value={appForm.authorType}
+                      onChange={e => setAppForm({...appForm, authorType: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold dark:text-white transition-colors"
+                    >
+                      <option value="Novelist">Mtunzi wa Hadithi/Riwaya (Novelist)</option>
+                      <option value="Educational">Muelimishaji (Educational)</option>
+                      <option value="Poet">Mshairi (Poet)</option>
+                      <option value="Journalist">Mwandishi wa Habari/Makala</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Kujihusu kwa ufupi (Short Bio)</label>
+                    <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Kujihusu kwa ufupi (Short Bio)</label>
                     <textarea 
                       required
                       value={appForm.bio}
                       onChange={e => setAppForm({...appForm, bio: e.target.value})}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none h-24 resize-none"
+                      className="w-full p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2rem] focus:ring-2 focus:ring-indigo-500 outline-none h-32 resize-none font-medium dark:text-white transition-colors"
                       placeholder="Elezea uzoefu wako au kwanini unataka kujiunga..."
                     />
                   </div>
 
-                  <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                    <h4 className="font-bold text-amber-900 mb-2 text-sm">Privacy & Terms Agreement</h4>
-                    <div className="flex items-start gap-2">
+                  <div className="bg-amber-50 dark:bg-amber-950/20 p-8 rounded-[2rem] border border-amber-100 dark:border-amber-900/40 shadow-inner">
+                    <h4 className="font-black text-amber-900 dark:text-amber-500 mb-4 text-lg flex items-center gap-2">
+                      <Shield size={20} /> Masharti ya Maudhui (Privacy & Terms)
+                    </h4>
+                    <div className="flex items-start gap-4">
                       <input 
                         type="checkbox" 
                         id="author-terms"
                         required
                         checked={appForm.agreed}
                         onChange={e => setAppForm({...appForm, agreed: e.target.checked})}
-                        className="mt-1 w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                        className="mt-1 w-6 h-6 text-indigo-600 border-indigo-200 rounded-lg focus:ring-indigo-500 cursor-pointer"
                       />
-                      <label htmlFor="author-terms" className="text-xs text-amber-800 leading-relaxed">
-                        Ninakubali masharti ya Story Studio. Nafahamu kuwa ni marufuku kabisa kutumia lugha chafu, matusi, kashfa, na maudhui yoyote ya kiutuuzima (adult content) au yasiyo na maadili. 
-                        Ninakubali kuwa kazi zangu zitakaguliwa na admin.
+                      <label htmlFor="author-terms" className="text-sm text-amber-800 dark:text-amber-400/80 leading-relaxed font-bold">
+                        Ninakubali masharti ya Story Studio. Nafahamu kuwa ni marufuku kabisa kutumia lugha chafu, matusi, kashfa, na maudhui yoyote ya kiutuuzima (adult content) au yasiyo na maadili mema. 
+                        Ninakubali kuwa kazi zangu zitakaguliwa na msimamizi kabla ya kuchapishwa.
                       </label>
                     </div>
                   </div>
@@ -261,9 +268,9 @@ export default function UserPanel() {
                   <button 
                     type="submit"
                     disabled={applying}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-2"
+                    className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-12 py-5 rounded-[1.5rem] font-black transition-all shadow-2xl shadow-indigo-600/30 disabled:opacity-50 flex items-center justify-center gap-3 active:scale-95 text-lg"
                   >
-                    {applying ? <Loader2 className="animate-spin" size={20} /> : null}
+                    {applying ? <Loader2 className="animate-spin" size={24} /> : <CheckCircle2 size={24} />}
                     Tuma Maombi ya Kuwa Mwandishi
                   </button>
                 </form>
@@ -295,37 +302,47 @@ export default function UserPanel() {
             </div>
           )}
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Clock className="text-indigo-600" /> Recently Read
+          <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-8 flex items-center gap-3">
+              <Clock className="text-indigo-600 dark:text-indigo-400" size={32} /> 
+              Ulichosoma Hivi Karibuni
             </h2>
 
             {loadingHistory ? (
-              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" /></div>
+              <div className="flex justify-center py-12"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
             ) : history.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
-                You haven't read any stories yet.
+              <div className="text-center py-20 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+                <Clock size={48} className="mx-auto opacity-20 mb-4" />
+                <p className="text-xl font-bold">Bado haujasoma hadithi yoyote.</p>
+                <p className="text-sm dark:text-slate-500">Hadithi utakazosoma zitaonekana hapa kwa ajili ya rejea.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {history.map((item) => (
-                  <div key={item.id} className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.title} className="w-16 h-16 rounded-xl object-cover" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-xl bg-indigo-50 text-indigo-300 flex items-center justify-center">
-                        <BookOpen size={24} />
-                      </div>
-                    )}
+                  <div key={item.id} className="flex items-center gap-5 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                    <div className="shrink-0">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt={item.title} className="w-20 h-20 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-300 dark:text-indigo-900/40 flex items-center justify-center">
+                          <BookOpen size={32} />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1">
-                      <h3 className="font-bold text-slate-900">{item.title}</h3>
-                      <p className="text-sm text-slate-500">By {item.authorName}</p>
+                      <h3 className="font-black text-slate-900 dark:text-white leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{item.title}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                        By {item.authorName}
+                      </p>
                     </div>
-                    <div className="hidden sm:block text-right">
-                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
-                        {item.genre}
-                      </span>
-                    </div>
+                    <button 
+                      onClick={() => setReadingStory(item)}
+                      className="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                      title="Soma tena"
+                    >
+                      <BookOpen size={20} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -335,67 +352,78 @@ export default function UserPanel() {
       )}
 
       {activeTab === 'saved' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Bookmark className="text-indigo-600" /> Saved for Later
-            </h2>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
+              <h2 className="text-4xl font-black text-slate-900 dark:text-white flex items-center gap-4">
+                <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-600/20">
+                  <Bookmark size={32} />
+                </div>
+                Maktaba Yangu (Library)
+              </h2>
+              {savedStories.length > 0 && (
+                <span className="px-6 py-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 rounded-full font-black text-sm border border-indigo-100 dark:border-indigo-900/40 shadow-sm">
+                  {savedStories.length} Hadithi Zilizohifadhiwa
+                </span>
+              )}
+            </div>
 
             {loadingSaved ? (
-              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" /></div>
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>
             ) : savedStories.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-3xl border border-slate-100">
-                <Bookmark size={48} className="mx-auto text-slate-300 mb-4" />
-                <p className="text-lg font-medium">You haven't saved any stories yet.</p>
-                <p className="text-sm">Browse the home page and click the bookmark icon to save stories here.</p>
+              <div className="text-center py-32 px-10 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 transition-all animate-in zoom-in duration-500">
+                <div className="w-32 h-32 bg-white dark:bg-slate-900 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl text-slate-200 dark:text-slate-800 ring-8 ring-slate-100 dark:ring-slate-900/50">
+                  <Bookmark size={64} />
+                </div>
+                <p className="text-3xl font-black text-slate-900 dark:text-white mb-3">Maktaba yako ni tupu</p>
+                <p className="text-lg mb-10 max-w-sm mx-auto font-medium text-slate-500 dark:text-slate-400">Gundua na hifadhi hadithi unazozipenda hapa ili uziweze kuzipata kwa urahisi baadaye.</p>
+                <Link to="/" className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white px-12 py-5 rounded-[1.5rem] font-black transition-all shadow-2xl shadow-indigo-600/30 inline-block active:scale-95 text-lg">Gundua Hadithi Sasa</Link>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-10">
                 {savedStories.map((story) => (
-                  <div key={story.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow group relative">
+                  <div key={story.id} className="bg-white dark:bg-slate-900/50 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative shadow-sm">
                     <button 
                       onClick={() => handleRemoveSaved(story.id)}
-                      className="absolute top-2 right-2 z-10 p-2 bg-white/90 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full shadow-sm transition-colors"
-                      title="Remove from saved"
+                      className="absolute top-6 right-6 z-10 p-4 bg-white/90 dark:bg-slate-900/90 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-500 rounded-3xl shadow-xl transition-all opacity-0 group-hover:opacity-100 backdrop-blur-md active:scale-90"
+                      title="Ondoa kwenye maktaba"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={24} />
                     </button>
                     
-                    {story.imageUrl ? (
-                      <div className="h-40 overflow-hidden">
-                        <img src={story.imageUrl} alt={story.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <div className="flex flex-col lg:flex-row h-full">
+                      <div className="lg:w-56 overflow-hidden shrink-0 relative aspect-[3/4] lg:aspect-auto">
+                        <img 
+                          src={story.imageUrl || 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=800'} 
+                          alt={story.title} 
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent lg:hidden"></div>
                       </div>
-                    ) : (
-                      <div className="h-40 bg-indigo-50 flex items-center justify-center text-indigo-200">
-                        <BookOpen size={40} />
-                      </div>
-                    )}
-                    
-                    <div className="p-5 flex-1 flex flex-col">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{story.genre}</span>
-                        {story.status === 'draft' && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">AI Draft</span>
-                        )}
-                      </div>
-                      <h3 className="font-bold text-slate-900 mb-1 line-clamp-1">{story.title}</h3>
-                      <p className="text-xs text-slate-500 mb-4">By {story.authorName}</p>
                       
-                      <div className="mt-auto flex items-center gap-2">
-                        <button 
-                          onClick={() => setReadingStory(story)}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl transition-colors text-xs text-center"
-                        >
-                          Read Now
-                        </button>
-                        {story.audioUrl && (
+                      <div className="p-10 flex-1 flex flex-col">
+                        <div className="flex items-center gap-2 mb-4">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-1.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 shadow-sm">{story.genre}</span>
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">{story.title}</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-10 font-bold">Na <span className="font-black text-slate-800 dark:text-slate-200">{story.authorName}</span></p>
+                        
+                        <div className="mt-auto pt-8 border-t border-slate-50 dark:border-slate-800 flex items-center gap-4">
                           <button 
                             onClick={() => setReadingStory(story)}
-                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+                            className="flex-1 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-black py-4 px-8 rounded-[1.8rem] transition-all text-sm shadow-xl shadow-indigo-600/30 active:scale-95"
                           >
-                            <Headphones size={16} />
+                            Anza Kusoma
                           </button>
-                        )}
+                          {story.audioUrl && (
+                            <button 
+                              onClick={() => setReadingStory(story)}
+                              className="w-14 h-14 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-2xl transition-all flex items-center justify-center shadow-inner active:scale-95"
+                            >
+                              <Headphones size={28} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -403,7 +431,6 @@ export default function UserPanel() {
               </div>
             )}
           </div>
-        </div>
       )}
 
       {activeTab === 'ai-writer' && (
@@ -414,39 +441,49 @@ export default function UserPanel() {
 
       {/* Reading Modal */}
       {readingStory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="flex items-center justify-between p-8 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">{readingStory.title}</h2>
-                <p className="text-slate-500 font-medium">By {readingStory.authorName}</p>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white leading-tight">{readingStory.title}</h2>
+                <p className="text-slate-500 dark:text-slate-400 font-bold mt-1">Na {readingStory.authorName} • {readingStory.genre}</p>
               </div>
               <button 
                 onClick={() => setReadingStory(null)}
-                className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 p-3 rounded-2xl transition-all"
               >
-                <X size={24} />
+                <X size={28} />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+            <div className="p-10 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950 scrollbar-thin scrollbar-thumb-indigo-200 dark:scrollbar-thumb-indigo-900">
               {readingStory.imageUrl && (
-                <img src={readingStory.imageUrl} alt={readingStory.title} className="w-full h-64 object-cover rounded-2xl mb-8 shadow-sm" />
+                <img src={readingStory.imageUrl} alt={readingStory.title} className="w-full h-96 object-cover rounded-[2.5rem] mb-12 shadow-xl" />
               )}
               
-              <div className="prose prose-indigo max-w-none">
-                {readingStory.content.split('\n').map((paragraph: string, i: number) => (
-                  <p key={i} className="mb-4 text-lg text-slate-800 leading-relaxed">{paragraph}</p>
-                ))}
+              <div className="max-w-3xl mx-auto">
+                <div className="prose prose-indigo dark:prose-invert max-w-none mb-16 text-slate-800 dark:text-slate-200">
+                  {readingStory.content.split('\n').map((paragraph: string, i: number) => (
+                    <p key={i} className="mb-8 text-2xl leading-relaxed font-serif tracking-normal">{paragraph}</p>
+                  ))}
+                </div>
               </div>
             </div>
             
             {readingStory.audioUrl && (
-              <div className="p-6 border-t border-slate-100 bg-white">
-                <p className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                  <Headphones size={16} className="text-indigo-600" /> Audio Narration
-                </p>
-                <audio controls src={readingStory.audioUrl} className="w-full h-12 rounded-full" autoPlay />
+              <div className="p-10 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="max-w-3xl mx-auto flex flex-col md:flex-row items-center gap-8">
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="w-16 h-16 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-indigo-600/20">
+                      <Headphones size={32} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Audio Narration</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Punguza au Ongeza Sauti</p>
+                    </div>
+                  </div>
+                  <audio controls src={readingStory.audioUrl} className="w-full h-14 rounded-full shadow-inner" autoPlay />
+                </div>
               </div>
             )}
           </div>
