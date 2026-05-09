@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, addDoc, onSnapshot, orderBy, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { BookOpen, Headphones, Search, Filter, X, Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
+import { BookOpen, Headphones, Search, Filter, X, Bookmark, BookmarkCheck, Loader2, MessageCircle, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../App';
 
 enum OperationType {
@@ -66,6 +66,11 @@ export default function Home() {
   const [readingStory, setReadingStory] = useState<any | null>(null);
   const [savedStoryIds, setSavedStoryIds] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const { profile } = useAuth();
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -100,6 +105,25 @@ export default function Home() {
 
   const handleReadStory = async (story: any) => {
     setReadingStory(story);
+    setLoadingComments(true);
+    setComments([]);
+    
+    // Setup real-time listener for comments
+    const commentsPath = `stories/${story.id}/comments`;
+    const q = query(collection(db, commentsPath), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedComments = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+      setComments(fetchedComments);
+      setLoadingComments(false);
+    }, (error) => {
+      console.error("Comments listener error:", error);
+      setLoadingComments(false);
+    });
+
     if (user) {
       const path = `users/${user.uid}/history/${story.id}`;
       try {
@@ -113,6 +137,42 @@ export default function Home() {
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
+    }
+
+    return unsubscribe;
+  };
+
+  const handlePostComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newComment.trim() || !readingStory) return;
+
+    setPostingComment(true);
+    const path = `stories/${readingStory.id}/comments`;
+    try {
+      await addDoc(collection(db, path), {
+        userId: user.uid,
+        userName: profile?.displayName || 'User',
+        text: newComment.trim(),
+        createdAt: serverTimestamp(),
+        authorId: readingStory.authorId // Useful for notifications or filtering
+      });
+      setNewComment('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } finally {
+      setPostingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!readingStory) return;
+    if (!window.confirm("Je, una uhakika unataka kufuta maoni haya?")) return;
+
+    const path = `stories/${readingStory.id}/comments/${commentId}`;
+    try {
+      await deleteDoc(doc(db, path));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -284,10 +344,82 @@ export default function Home() {
                 <img src={readingStory.imageUrl} alt={readingStory.title} className="w-full h-64 object-cover rounded-2xl mb-8 shadow-sm" />
               )}
               
-              <div className="prose prose-indigo max-w-none">
+              <div className="prose prose-indigo max-w-none mb-12">
                 {readingStory.content.split('\n').map((paragraph: string, i: number) => (
                   <p key={i} className="mb-4 text-lg text-slate-800 leading-relaxed">{paragraph}</p>
                 ))}
+              </div>
+
+              {/* Comments Section */}
+              <div className="mt-12 pt-12 border-t border-slate-200">
+                <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  <MessageCircle className="text-indigo-600" size={24} />
+                  Maoni ya Wasomaji ({comments.length})
+                </h3>
+
+                {user ? (
+                  <form onSubmit={handlePostComment} className="mb-8 relative">
+                    <textarea 
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Andika maoni yako hapa..."
+                      className="w-full p-4 pr-14 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24 shadow-sm"
+                      required
+                    />
+                    <button 
+                      type="submit"
+                      disabled={postingComment || !newComment.trim()}
+                      className="absolute bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                    >
+                      {postingComment ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 text-center mb-8">
+                    <p className="text-sm text-indigo-700 font-medium">Ingia (Sign In) ili uweze kutoa maoni yako.</p>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {loadingComments ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 size={24} className="animate-spin text-indigo-600" />
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <p className="text-center text-slate-400 py-8 italic">Hakuna maoni bado. Kuwa wa kwanza kutoa maoni!</p>
+                  ) : (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm group">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xs">
+                              {comment.userName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{comment.userName}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {comment.createdAt?.toDate ? new Date(comment.createdAt.toDate()).toLocaleDateString() : 'Hivi sasa'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {user && (profile?.role === 'admin' || user.uid === comment.userId || user.uid === readingStory.authorId) && (
+                            <button 
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-red-50"
+                              title="Futa maoni"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line pl-10">
+                          {comment.text}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
             

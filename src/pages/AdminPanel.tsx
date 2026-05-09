@@ -38,10 +38,7 @@ export default function AdminPanel() {
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const lowerUsername = adminUsername.toLowerCase().trim();
-    if ((lowerUsername === 'migosking706@gmail.com' && adminPassword === 'dani4ody') || 
-        (lowerUsername === 'admin' && adminPassword === 'dani4ody') ||
-        (lowerUsername === 'admin@storystudio.app' && adminPassword === 'dani4ody') ||
-        (lowerUsername === 'elizabethkumburu90@gmail.com' && adminPassword === 'dani4ody')) {
+    if (lowerUsername === 'admin' && adminPassword === 'dani4ody') {
       setIsUnlocked(true);
       setLoginError(false);
     } else {
@@ -267,23 +264,52 @@ export default function AdminPanel() {
                 No pending author requests.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {pendingAuthors.map((author) => (
-                  <div key={author.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50">
-                    <p className="font-bold text-slate-900">{author.displayName}</p>
-                    <p className="text-sm text-slate-500 mb-4">{author.email}</p>
-                    <div className="flex gap-2">
+                  <div key={author.id} className="p-6 rounded-3xl border border-slate-200 bg-white shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-slate-900 text-lg">{author.displayName}</p>
+                        <p className="text-sm text-slate-500">{author.email}</p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-1 rounded-md">Pending</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Pen Name</p>
+                        <p className="text-sm font-bold text-indigo-600">{author.authorApplication?.pseudonym || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Author Type</p>
+                        <p className="text-sm font-bold text-slate-700">{author.authorApplication?.authorType || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Statement of Interest / Bio</p>
+                      <p className="text-sm text-slate-600 italic whitespace-pre-line leading-relaxed">
+                        "{author.authorApplication?.bio || 'No bio provided'}"
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 text-[10px] text-slate-400 font-medium">
+                      <Check size={12} className={author.authorApplication?.agreedToCompliance ? "text-emerald-500" : "text-red-500"} />
+                      Agreed to Privacy & Terms (No offensive content)
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
                       <button 
                         onClick={() => handleAuthorAction(author.id, 'approved')}
-                        className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold py-2 px-3 rounded-xl transition-colors text-sm flex items-center justify-center gap-1"
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2"
                       >
-                        <Check size={16} /> Approve
+                        <Check size={18} /> Approve Account
                       </button>
                       <button 
                         onClick={() => handleAuthorAction(author.id, 'none')}
-                        className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-3 rounded-xl transition-colors text-sm flex items-center justify-center gap-1"
+                        className="flex-1 bg-white hover:bg-red-50 text-red-600 border border-red-100 font-bold py-3 px-4 rounded-2xl transition-all text-sm flex items-center justify-center gap-2"
                       >
-                        <X size={16} /> Reject
+                        <X size={18} /> Reject
                       </button>
                     </div>
                   </div>

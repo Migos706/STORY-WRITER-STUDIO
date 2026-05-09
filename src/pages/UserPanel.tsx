@@ -59,6 +59,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 export default function UserPanel() {
   const { user, profile } = useAuth();
   const [applying, setApplying] = useState(false);
+  const [appForm, setAppForm] = useState({
+    pseudonym: '',
+    authorType: 'Novelist',
+    bio: '',
+    agreed: false
+  });
   const [history, setHistory] = useState<any[]>([]);
   const [savedStories, setSavedStories] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -108,12 +114,24 @@ export default function UserPanel() {
 
   if (!profile) return null;
 
-  const handleApplyAuthor = async () => {
+  const handleApplyAuthor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appForm.agreed) {
+      alert("Lazima ukubaliane na sheria na kanuni (Privacy & Terms) ili uendelee.");
+      return;
+    }
     setApplying(true);
     const path = `users/${profile.uid}`;
     try {
       await updateDoc(doc(db, path), {
-        authorStatus: 'pending'
+        authorStatus: 'pending',
+        authorApplication: {
+          pseudonym: appForm.pseudonym,
+          authorType: appForm.authorType,
+          bio: appForm.bio,
+          agreedToCompliance: appForm.agreed,
+          appliedAt: Date.now()
+        }
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -175,31 +193,103 @@ export default function UserPanel() {
           {profile.role === 'user' && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
               <h2 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <BookOpen className="text-indigo-600" /> Become an Author
+                <BookOpen className="text-indigo-600" /> Omba Kuwa Mwandishi (Author)
               </h2>
-              <p className="text-slate-600 mb-6">
-                Want to publish your own stories and share them with the world? Apply to become an author in Story Studio!
-              </p>
               
               {profile.authorStatus === 'none' && (
-                <button 
-                  onClick={handleApplyAuthor}
-                  disabled={applying}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-colors disabled:opacity-50"
-                >
-                  {applying ? 'Applying...' : 'Apply Now'}
-                </button>
+                <form onSubmit={handleApplyAuthor} className="space-y-6">
+                  <p className="text-slate-600">
+                    Unataka kuchapisha hadithi zako na kuzishirikisha duniani? Jaza fomu hii ili uweze kuwa mwandishi katika Story Studio.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Jina la Kalamu (Pseudonym / Pen Name)</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={appForm.pseudonym}
+                        onChange={e => setAppForm({...appForm, pseudonym: e.target.value})}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                        placeholder="Mtumiaji atakuona kwa jina hili"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Aina ya Mwandishi (Author Type)</label>
+                      <select 
+                        value={appForm.authorType}
+                        onChange={e => setAppForm({...appForm, authorType: e.target.value})}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                      >
+                        <option value="Novelist">Mtunzi wa Hadithi/Riwaya (Novelist)</option>
+                        <option value="Educational">Muelimishaji (Educational)</option>
+                        <option value="Poet">Mshairi (Poet)</option>
+                        <option value="Journalist">Mwandishi wa Habari/Makala</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Kujihusu kwa ufupi (Short Bio)</label>
+                    <textarea 
+                      required
+                      value={appForm.bio}
+                      onChange={e => setAppForm({...appForm, bio: e.target.value})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none h-24 resize-none"
+                      placeholder="Elezea uzoefu wako au kwanini unataka kujiunga..."
+                    />
+                  </div>
+
+                  <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                    <h4 className="font-bold text-amber-900 mb-2 text-sm">Privacy & Terms Agreement</h4>
+                    <div className="flex items-start gap-2">
+                      <input 
+                        type="checkbox" 
+                        id="author-terms"
+                        required
+                        checked={appForm.agreed}
+                        onChange={e => setAppForm({...appForm, agreed: e.target.checked})}
+                        className="mt-1 w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                      />
+                      <label htmlFor="author-terms" className="text-xs text-amber-800 leading-relaxed">
+                        Ninakubali masharti ya Story Studio. Nafahamu kuwa ni marufuku kabisa kutumia lugha chafu, matusi, kashfa, na maudhui yoyote ya kiutuuzima (adult content) au yasiyo na maadili. 
+                        Ninakubali kuwa kazi zangu zitakaguliwa na admin.
+                      </label>
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    disabled={applying}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {applying ? <Loader2 className="animate-spin" size={20} /> : null}
+                    Tuma Maombi ya Kuwa Mwandishi
+                  </button>
+                </form>
               )}
               
               {profile.authorStatus === 'pending' && (
-                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl font-medium border border-amber-200">
-                  <Clock size={20} /> Your application is pending admin approval.
+                <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                  <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center animate-pulse">
+                    <Clock size={32} />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-xl font-bold text-slate-900">Maombi yanachakatwa</h3>
+                    <p className="text-slate-500">Maombi yako yapo mezani kwa Admin. Utapokea taarifa hapa yakishakubaliwa.</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 max-w-md w-full">
+                    <p className="text-xs font-bold text-slate-400 uppercase mb-2">Taarifa zako:</p>
+                    <p className="text-sm"><strong>Pseudonym:</strong> {profile.authorApplication?.pseudonym}</p>
+                    <p className="text-sm"><strong>Type:</strong> {profile.authorApplication?.authorType}</p>
+                  </div>
                 </div>
               )}
 
               {profile.authorStatus === 'approved' && (
-                <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-3 rounded-xl font-medium border border-emerald-200">
-                  <CheckCircle2 size={20} /> You are an approved author!
+                <div className="flex items-center gap-3 text-emerald-600 bg-emerald-50 px-6 py-4 rounded-2xl font-bold border border-emerald-200">
+                  <CheckCircle2 size={24} /> 
+                  Hongera! Wewe ni mwandishi aliyeidhinishwa katika Story Studio.
                 </div>
               )}
             </div>

@@ -12,8 +12,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTerms, setShowTerms] = useState(false);
 
   if (!isOpen) return null;
 
@@ -42,6 +44,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     e.preventDefault();
     if (!username || !password) {
       setError("Please enter both username and password.");
+      return;
+    }
+
+    if (!isLogin && !agreedToTerms) {
+      setError("You must agree to the Privacy Policy and Terms of Service.");
       return;
     }
 
@@ -132,6 +139,23 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 />
               </div>
             </div>
+
+            {!isLogin && (
+              <div className="flex items-start gap-2 pt-2">
+                <input 
+                  type="checkbox" 
+                  id="terms"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-1 w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                />
+                <label htmlFor="terms" className="text-xs text-slate-600 leading-relaxed">
+                  I agree to the <button type="button" onClick={() => setShowTerms(true)} className="text-indigo-600 font-bold hover:underline">Privacy Policy & Terms of Service</button>. 
+                  I understand that offensive language, insults, and adult content are strictly prohibited.
+                </label>
+              </div>
+            )}
+
             <button 
               type="submit"
               disabled={loading}
@@ -176,6 +200,52 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         </div>
       </div>
+
+      {showTerms && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-900">Privacy & Terms of Service</h3>
+              <button 
+                onClick={() => setShowTerms(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4 text-slate-600 text-sm leading-relaxed">
+              <section>
+                <h4 className="font-bold text-slate-900 mb-2">1. Kabuliana na Masharti</h4>
+                <p>Kwa kujiunga na Story Studio, unakubaliana na masharti haya ya huduma. Ikiwa hukubaliani na sehemu yoyote ya masharti haya, hupaswi kutumia studio hii.</p>
+              </section>
+              <section>
+                <h4 className="font-bold text-slate-900 mb-2 text-red-600">2. Maadili na Maudhui (Muhimu)</h4>
+                <p className="bg-red-50 p-3 rounded-lg border border-red-100 font-medium text-red-700">
+                  Tunazingatia maadili ya juu. Ni marufuku kabisa kutumia lugha chafu, matusi, kashfa, herufi au maneno yasiyo na staha, na maudhui yoyote ya kiutuuzima (adult content) au yasiyo na maadili. 
+                  Ukiukaji wa sheria hii utasababisha kufungiwa kwa akaunti yako mara moja bila taarifa.
+                </p>
+              </section>
+              <section>
+                <h4 className="font-bold text-slate-900 mb-2">3. Umiliki wa Maudhui</h4>
+                <p>Waandishi wanamiliki hakimiliki ya kazi zao, lakini kwa kuziweka hapa, wanatupa ruhusa ya kuzihifadhi na kuzionyesha kwa watumiaji wetu.</p>
+              </section>
+              <section>
+                <h4 className="font-bold text-slate-900 mb-2">4. Faragha (Privacy)</h4>
+                <p>Tunachukua usalama wa data zako kwa umakini. Barua pepe yako na taarifa zako hazitauzwa wala kushirikishwa kwa watu baki bila idhini yako.</p>
+              </section>
+              <p className="pt-4 border-t border-slate-100 italic text-slate-400 text-xs">Toleo la 1.0 - Story Studio Compliance</p>
+            </div>
+            <div className="p-4 border-t border-slate-100 text-center">
+              <button 
+                onClick={() => setShowTerms(false)}
+                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-colors"
+              >
+                Nimeelewa na Kukubali
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,13 @@ export interface UserProfile {
   displayName: string;
   role: 'admin' | 'author' | 'user';
   authorStatus: 'none' | 'pending' | 'approved';
+  authorApplication?: {
+    pseudonym: string;
+    authorType: string;
+    bio: string;
+    agreedToCompliance: boolean;
+    appliedAt: number;
+  };
 }
 
 // --- Auth Context ---

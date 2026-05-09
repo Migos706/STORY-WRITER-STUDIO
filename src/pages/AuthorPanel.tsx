@@ -60,7 +60,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Education', 'Comedy', 'Horror'];
-const MOODS = ['Happy', 'Sad', 'Suspenseful', 'Calm', 'Energetic', 'Romantic'];
+const MOODS = ['Happy', 'Sad', 'Suspenseful', 'Calm', 'Energetic', 'Romantic', 'Dark', 'Mystical'];
+const NARRATION_STYLES = ['First Person (I)', 'Third Person Limited (He/She)', 'Third Person Omniscient', 'Epistolary (Letters/Journal)', 'Poetic/Lyric'];
 const VOICES = [
   { id: 'Charon', label: 'News Anchor', description: 'Authoritative and clear' },
   { id: 'Kore', label: 'Calm Voice', description: 'Soothing and relaxed' },
@@ -111,6 +112,7 @@ export default function AuthorPanel() {
   const [content, setContent] = useState('');
   const [genre, setGenre] = useState(GENRES[0]);
   const [mood, setMood] = useState(MOODS[0]);
+  const [narrationStyle, setNarrationStyle] = useState(NARRATION_STYLES[1]);
   const [selectedVoice, setSelectedVoice] = useState(VOICES[3].id);
   
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function AuthorPanel() {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [storyPrompt, setStoryPrompt] = useState('');
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +159,98 @@ export default function AuthorPanel() {
       setMessage({ type: 'error', text: 'Failed to generate image: ' + error.message });
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleGenerateAIStory = async () => {
+    if (!storyPrompt && !title) {
+      setMessage({ type: 'error', text: 'Please provide a story idea or a title first.' });
+      return;
+    }
+    setIsGeneratingStory(true);
+    setMessage(null);
+    try {
+      const prompt = `You are a world-class novelist and professional creative storyteller with the creative depth of Gemini 1.5 Pro and ChatGPT-4. 
+      Your goal is to write a deeply immersive, high-quality, and meaningful story that feels alive.
+      
+      Author's Intent/Context: ${storyPrompt || 'Write an original literary masterpiece'}
+      Title: ${title || 'Suggest a fitting title'}
+      Genre: ${genre}
+      Mood/Atmosphere: ${mood}
+      Narration Style/Perspective: ${narrationStyle}
+      
+      CORE LITERARY INSTRUCTIONS:
+      1. GENRE FAITHFULNESS: Strictly adhere to the tropes and expectations of the ${genre} genre, while adding unique twists.
+      2. MOOD EMBODIMENT: The prose itself must reflect the ${mood} mood. If it's Dark, use shadows and heavy metaphors. If it's Happy, use light and rhythmic sentences.
+      3. NARRATION: Use the ${narrationStyle} perspective consistently. Deeply explore the internal state of characters if it's First Person or Limited Third.
+      4. LENGTH & DETAIL: Write an EXTREMELY long story. We are aiming for a novella-length experience (at least 3-5 full pages of text). NEVER summarize "they went there." Describe the journey, the sights, and the conversations.
+      5. ENVIRONMENTALLY RICH: Spend significant time on world-building and environmental description. The setting should be a character itself.
+      6. THEME: Ensure the story has a deep moral or philosophical dhumuni (purpose).
+      
+      Structure the output as a JSON object: {"title": "The Captured Title", "content": "The full, exhaustive, and deeply detailed story content..."}`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: prompt,
+        config: {
+          systemInstruction: "You are a master novelist. Your writing is expansive, poetic, and structurally sound. You never write short summaries; you write complete books with deep environmental and character analysis."
+        }
+      });
+      
+      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
+      const result = JSON.parse(text);
+      
+      if (result.title) setTitle(result.title);
+      if (result.content) setContent(result.content);
+      setMessage({ type: 'success', text: 'AI has crafted an expansive story! Review and edit it below.' });
+    } catch (error: any) {
+      console.error(error);
+      setMessage({ type: 'error', text: 'Failed to generate story: ' + error.message });
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
+  const handleExpandStory = async () => {
+    if (!content) {
+      setMessage({ type: 'error', text: 'Please generate or write some content first.' });
+      return;
+    }
+    setIsGeneratingStory(true);
+    setMessage(null);
+    try {
+      const prompt = `Current Story Progress (Title: "${title}"):
+      
+      ${content}
+      
+      TASK: Continue and EXPAND this story significantly. 
+      1. Add more depth to the current scene or start the next chapter.
+      2. Focus heavily on character internal monologue and environmental descriptions.
+      3. Ensure it flows perfectly from the last sentence.
+      4. Avoid repetition.
+      
+      Reply with a JSON object: {"content": "The additional story content ONLY to be appended..."}`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: prompt,
+        config: {
+          systemInstruction: "You are a master novelist continuing a work in progress. Your goal is to add more depth, length, and detail without summarizing."
+        }
+      });
+      
+      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
+      const result = JSON.parse(text);
+      
+      if (result.content) {
+        setContent(prev => prev + "\n\n" + result.content);
+        setMessage({ type: 'success', text: 'AI has expanded your story with more chapters and details!' });
+      }
+    } catch (error: any) {
+      console.error(error);
+      setMessage({ type: 'error', text: 'Failed to expand story: ' + error.message });
+    } finally {
+      setIsGeneratingStory(false);
     }
   };
 
@@ -380,19 +475,50 @@ export default function AuthorPanel() {
       )}
 
       <div className="space-y-6">
-        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-indigo-900">Real-World Inspiration</h3>
-            <p className="text-sm text-indigo-700">Use AI connected to the live internet to generate a story based on real, current events or facts.</p>
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-3xl border border-indigo-100 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Send className="text-indigo-600" size={20} />
+            <h3 className="font-bold text-indigo-900 text-lg">AI Story Generator</h3>
           </div>
-          <button 
-            onClick={handleGenerateRealWorldStory}
-            disabled={isGeneratingStory}
-            className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-2 text-sm"
-          >
-            {isGeneratingStory ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
-            Generate Real-World Story
-          </button>
+          
+          <div>
+            <label className="block text-sm font-bold text-indigo-700 mb-2">What is your story about? (Intent/Plot)</label>
+            <textarea 
+              value={storyPrompt}
+              onChange={(e) => setStoryPrompt(e.target.value)}
+              className="w-full p-4 bg-white/80 border border-indigo-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
+              placeholder="e.g. A young girl discovers a hidden door in her library that leads to a world where books are alive..."
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <button 
+              onClick={handleGenerateAIStory}
+              disabled={isGeneratingStory}
+              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+            >
+              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <BookOpen size={18} />}
+              Write My Full Story (Master AI)
+            </button>
+            <button 
+              onClick={handleExpandStory}
+              disabled={isGeneratingStory || !content}
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
+              title="Add more chapters and depth to the current story"
+            >
+              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+              Expand Story (Add More)
+            </button>
+            <button 
+              onClick={handleGenerateRealWorldStory}
+              disabled={isGeneratingStory}
+              className="w-full sm:w-auto bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+            >
+              {isGeneratingStory ? <Loader2 size={18} className="animate-spin" /> : <Globe size={18} />}
+              Daily Inspiration (Facts)
+            </button>
+          </div>
+          <p className="text-xs text-indigo-500 italic">Advanced Literary Engine (Gemini 3.1 Pro) enabled: Designed for multi-page, deep narrative creation.</p>
         </div>
 
         <div>
@@ -406,7 +532,7 @@ export default function AuthorPanel() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2">Genre</label>
             <select 
@@ -425,6 +551,16 @@ export default function AuthorPanel() {
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
             >
               {MOODS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Narration Style</label>
+            <select 
+              value={narrationStyle}
+              onChange={(e) => setNarrationStyle(e.target.value)}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+            >
+              {NARRATION_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
@@ -492,36 +628,48 @@ export default function AuthorPanel() {
 
           {/* Audio Generation / Upload */}
           <div className="space-y-4">
-            <div className="flex gap-2">
-              <button 
-                onClick={handleGenerateAudio}
-                disabled={isGeneratingAudio}
-                className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm"
-              >
-                {isGeneratingAudio ? <Loader2 className="animate-spin" /> : <Mic size={18} />}
-                Generate Audio
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm"
-              >
-                <Upload size={18} />
-                Upload Audio
-              </button>
-              <input 
-                type="file" 
-                accept="audio/*" 
-                className="hidden" 
-                ref={fileInputRef}
-                onChange={handleAudioUpload}
-              />
-            </div>
-            {audioUrl && (
-              <div className="space-y-2">
-                <audio controls src={audioUrl} className="w-full h-12 rounded-full" />
-                {audioFile && <p className="text-xs text-slate-500 text-center">Custom audio selected: {audioFile.name}</p>}
+            <label className="block text-sm font-bold text-slate-700 mb-1">Story Audio (Narration)</label>
+            <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-2xl space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button 
+                  onClick={handleGenerateAudio}
+                  disabled={isGeneratingAudio}
+                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm border border-indigo-200"
+                >
+                  {isGeneratingAudio ? <Loader2 className="animate-spin" size={18} /> : <Mic size={18} />}
+                  Generate AI Voice
+                </button>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl font-bold transition-colors text-sm border border-slate-200 shadow-sm"
+                >
+                  <Upload size={18} className="text-indigo-600" />
+                  Upload Audio File
+                </button>
+                <input 
+                  type="file" 
+                  accept="audio/*" 
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={handleAudioUpload}
+                />
               </div>
-            )}
+              
+              {audioUrl ? (
+                <div className="space-y-3 p-3 bg-white rounded-xl border border-slate-100 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Audio Preview</span>
+                    {audioFile && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">Uploaded</span>}
+                  </div>
+                  <audio controls src={audioUrl} className="w-full h-10" />
+                  {audioFile && <p className="text-[10px] text-center text-slate-400">File: {audioFile.name}</p>}
+                </div>
+              ) : (
+                <div className="py-4 text-center">
+                  <p className="text-xs text-slate-400">No audio added yet. Generate one with AI or upload your own narration.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
