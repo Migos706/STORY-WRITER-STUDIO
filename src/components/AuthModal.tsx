@@ -48,17 +48,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setLoading(true);
     setError(null);
 
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+
     // Use the input directly if it looks like an email, otherwise map to a dummy email
-    const email = username.includes('@') 
-      ? username 
-      : `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@storystudio.app`;
+    const email = trimmedUsername.includes('@') 
+      ? trimmedUsername 
+      : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9]/g, '')}@storystudio.app`;
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email, trimmedPassword);
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: username });
+        const userCredential = await createUserWithEmailAndPassword(auth, email, trimmedPassword);
+        await updateProfile(userCredential.user, { displayName: trimmedUsername });
       }
       onClose();
     } catch (err: any) {

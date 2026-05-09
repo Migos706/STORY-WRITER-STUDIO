@@ -37,8 +37,11 @@ export default function AdminPanel() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if ((adminUsername === 'migosking706@gmail.com' && adminPassword === 'dani4ody') || 
-        (adminUsername === 'admin' && adminPassword === 'admin2026')) {
+    const lowerUsername = adminUsername.toLowerCase().trim();
+    if ((lowerUsername === 'migosking706@gmail.com' && adminPassword === 'dani4ody') || 
+        (lowerUsername === 'admin' && adminPassword === 'dani4ody') ||
+        (lowerUsername === 'admin@storystudio.app' && adminPassword === 'dani4ody') ||
+        (lowerUsername === 'elizabethkumburu90@gmail.com' && adminPassword === 'dani4ody')) {
       setIsUnlocked(true);
       setLoginError(false);
     } else {

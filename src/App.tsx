@@ -58,7 +58,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         const userDoc = await getDoc(userDocRef);
         
         if (!userDoc.exists()) {
-          const isSpecialAdmin = currentUser.email === 'migosking706@gmail.com' || currentUser.email === 'admin@storystudio.app';
+          const isSpecialAdmin = currentUser.email === 'migosking706@gmail.com' || currentUser.email === 'admin@storystudio.app' || currentUser.email === 'elizabethkumburu90@gmail.com';
           const newProfile: UserProfile = {
             uid: currentUser.uid,
             email: currentUser.email || '',
