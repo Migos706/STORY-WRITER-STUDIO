@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, addDoc
 import { db, auth } from '../firebase';
 import { BookOpen, Headphones, Search, Filter, X, Bookmark, BookmarkCheck, Loader2, MessageCircle, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../App';
+import StoryGenerator from '../components/StoryGenerator';
 
 enum OperationType {
   CREATE = 'create',
@@ -244,6 +245,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* AI Story Generator */}
+      <StoryGenerator />
 
       {/* Filters and Search */}
       <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-all">
