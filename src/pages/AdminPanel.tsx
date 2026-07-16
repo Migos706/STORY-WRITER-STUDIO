@@ -2,21 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { GoogleGenAI } from '@google/genai';
 import { Shield, Users, BookOpen, Check, X, AlertTriangle, Loader2, Lock, Filter, BarChart3, PenTool, Sparkles } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import AuthorPanel from './AuthorPanel';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { getApiUrl } from '../utils/api';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function AdminPanel() {
   const { profile } = useAuth();
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [loginError, setLoginError] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'management' | 'insights' | 'write'>('dashboard');
 
@@ -31,20 +25,9 @@ export default function AdminPanel() {
   const [safetyFilter, setSafetyFilter] = useState('all');
 
   useEffect(() => {
-    if (profile?.role !== 'admin' || !isUnlocked) return;
+    if (profile?.role !== 'admin') return;
     fetchData();
-  }, [profile, isUnlocked, activeTab]);
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const lowerUsername = adminUsername.toLowerCase().trim();
-    if (lowerUsername === 'admin' && adminPassword === 'dani4ody') {
-      setIsUnlocked(true);
-      setLoginError(false);
-    } else {
-      setLoginError(true);
-    }
-  };
+  }, [profile, activeTab]);
 
   const fetchData = async () => {
     try {
@@ -99,18 +82,21 @@ export default function AdminPanel() {
   const runSecurityCheck = async (storyId: string, content: string) => {
     setCheckingStoryId(storyId);
     try {
-      const prompt = `Analyze the following story for harsh, rough, offensive, or inappropriate language. Reply with ONLY a JSON object in this format: {"isSafe": boolean, "reason": "short explanation"}. Story:\n\n${content}`;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
+      const response = await fetch(getApiUrl('/api/ai/run-security-check'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyId, content })
       });
-      
-      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
-      const result = JSON.parse(text);
+
+      if (!response.ok) {
+        throw new Error("Failed to run security check from server.");
+      }
+
+      const result = await response.json();
       
       await updateDoc(doc(db, 'stories', storyId), {
         safetyStatus: result.isSafe ? 'safe' : 'flagged',
-        safetyReason: result.reason
+        safetyReason: result.reason || ''
       });
       fetchData();
     } catch (error) {
@@ -122,55 +108,6 @@ export default function AdminPanel() {
 
   if (profile?.role !== 'admin') {
     return <div className="text-center p-12 text-red-600 font-bold">Admin access required.</div>;
-  }
-
-  if (!isUnlocked) {
-    return (
-      <div className="max-w-md mx-auto mt-12 bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 text-center animate-in fade-in zoom-in duration-300">
-        <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Shield size={40} />
-        </div>
-        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2">Admin Portal</h2>
-        <p className="text-slate-500 dark:text-slate-400 mb-8">Tafadhali ingiza siri ya msimamizi kuendelea.</p>
-        
-        {loginError && (
-          <div className="bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 p-3 rounded-xl text-sm font-bold mb-6 border border-red-100 dark:border-red-900/40">
-            Jina la mtumiaji au nenosiri si sahihi.
-          </div>
-        )}
-
-        <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Username / Email</label>
-            <input 
-              type="text" 
-              value={adminUsername}
-              onChange={(e) => setAdminUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white transition-colors"
-              placeholder="Enter master username"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Password</label>
-            <input 
-              type="password" 
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white transition-colors"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-          <button 
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 mt-6 active:scale-95 shadow-lg shadow-indigo-600/20"
-          >
-            <Lock size={18} /> Fungua Dashboard
-          </button>
-        </form>
-      </div>
-    );
   }
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>;

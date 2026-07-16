@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { db, auth } from '../firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { 
@@ -20,9 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { motion, AnimatePresence } from 'motion/react';
-
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { getApiUrl } from '../utils/api';
 
 const SHUFFLE_PROMPTS = [
   {
@@ -157,47 +154,24 @@ export default function StoryGenerator() {
       const gName = GENRES.find(g => g.id === selectedGenre)?.[language === 'sw' ? 'sw' : 'en'] || selectedGenre;
       const mName = MOODS.find(m => m.id === selectedMood)?.[language === 'sw' ? 'sw' : 'en'] || selectedMood;
       
-      const lengthInstruction = length === 'short' 
-        ? "Write a delightful short story (about 3-4 dense paragraphs)." 
-        : length === 'medium'
-        ? "Write an expansive story with deep paragraphs and detailed world descriptions (about 5-8 paragraphs)."
-        : "Write a long, epic story with incredible environment building, characters dialogue and immersive depth.";
-
-      const prompt = `
-        You are a highly skilled storyteller and award-winning author. Write an exquisite, finished story in the language corresponding to: "${language === 'sw' ? 'Swahili (Kiswahili cha kusanifu na cha kusisimua)' : 'English'}".
-        
-        STORY CONFIGURATIONS:
-        - Protagonist/Main Character: ${characterName || 'An unnamed hero'}
-        - Genre: ${gName}
-        - Overall Mood/Vibe: ${mName}
-        - Plot Premise: ${premise}
-        
-        INSTRUCTIONS:
-        1. Fully embody the specified genre and mood in the prose style.
-        2. ${lengthInstruction}
-        3. Do not leave the story incomplete or write summaries. Provide complete resolution or a thrilling narrative arc.
-        4. Integrate the protagonist character name smoothly into the storytelling.
-        5. Write structurally sound text with dialogue and immersive metaphors.
-        
-        You MUST structure your response strictly as a JSON object containing two properties:
-        {
-          "title": "A highly catchy, unique title representing this customized story",
-          "content": "The full complete storytelling content text. Use double newlines \\n\\n for paragraphs."
-        }
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: prompt,
-        config: {
-          systemInstruction: "You are an expert AI novelist. You generate highly immersive stories packaged purely inside a JSON schema. Avoid any prefix, markdown codes, or conversational dialogue outside the JSON.",
-          responseMimeType: "application/json"
-        }
+      const response = await fetch(getApiUrl('/api/ai/generate-interactive-story'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          premise,
+          characterName: characterName || 'An unnamed hero',
+          genre: gName,
+          mood: mName,
+          language,
+          length
+        })
       });
 
-      const responseText = response.text || '';
-      const textToParse = responseText.trim().replace(/```json/g, '').replace(/```/g, '');
-      const parsed = JSON.parse(textToParse);
+      if (!response.ok) {
+        throw new Error("Failed to generate story from server.");
+      }
+
+      const parsed = await response.json();
       
       if (!parsed.title || !parsed.content) {
         throw new Error("Missing parameters on parsed response");

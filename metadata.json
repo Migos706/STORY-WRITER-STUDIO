@@ -1,5 +1,6 @@
 {
   "name": "Story Studio",
-  "description": "Generate personalized audio stories, news summaries, and explanations with custom voices.",
-  "requestFramePermissions": []
+  "description": "A professional bilingual storytelling studio featuring advanced AI chapter-by-chapter novel writing, custom worlds, character designers, audio narration, and multi-language support in Swahili and English.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

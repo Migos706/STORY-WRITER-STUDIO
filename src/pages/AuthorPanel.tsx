@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../App';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { db, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from '../firebase';
-import { GoogleGenAI, Modality } from '@google/genai';
-import { Loader2, Image as ImageIcon, Mic, Send, BookOpen, CheckCircle2, Upload, Globe, Shield } from 'lucide-react';
+import { Loader2, Image as ImageIcon, Send, BookOpen, CheckCircle2, ArrowRight, ArrowLeft, Plus, Trash2, Globe, Sparkles, Wand2 } from 'lucide-react';
+import { locales, Language } from '../locales';
+import { getApiUrl } from '../utils/api';
 
 enum OperationType {
   CREATE = 'create',
@@ -24,13 +25,6 @@ interface FirestoreErrorInfo {
     email: string | null | undefined;
     emailVerified: boolean | undefined;
     isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
   }
 }
 
@@ -38,655 +32,1274 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
+      userId: undefined,
+      email: undefined,
+      emailVerified: undefined,
+      isAnonymous: undefined,
     },
     operationType,
     path
-  }
+  };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-const GENRES = ['Njozi (Fantasy)', 'Sayansi (Sci-Fi)', 'Mahaba (Romance)', 'Siri (Mystery)', 'Elimu (Education)', 'Vichekesho (Comedy)', 'Kutisha (Horror)'];
-const MOODS = ['Furaha', 'Huzuni', 'Hamasa', 'Utulivu', 'Changamfu', 'Kivutio', 'Giza', 'Linalovutia'];
-const NARRATION_STYLES = ['Nafasi ya Kwanza (Mimi)', 'Nafasi ya Tatu (Yeye)', 'Msimulizi Anayejua Yote', 'Jarida (Letters/Journal)', 'Kishairi (Poetic)'];
-const VOICES = [
-  { id: 'Charon', label: 'Msemaji wa Habari', description: 'Sauti yenye mamlaka' },
-  { id: 'Kore', label: 'Sauti ya Utulivu', description: 'Inatuliza na kupumzisha' },
-  { id: 'Fenrir', label: 'Mwasilishaji Hamasa', description: 'Sauti changamfu' },
-  { id: 'Zephyr', label: 'Msimulizi', description: 'Sauti inayovutia na kuelezea' },
-  { id: 'Puck', label: 'Mwenyeji Rafiki', description: 'Sauti ya kirafiki na mazungumzo' },
-];
-
-function createWavBlob(pcmData: Int16Array, sampleRate: number): Blob {
-  const numChannels = 1;
-  const byteRate = sampleRate * numChannels * 2;
-  const blockAlign = numChannels * 2;
-  const dataSize = pcmData.length * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeString = (view: DataView, offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true);
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  let offset = 44;
-  for (let i = 0; i < pcmData.length; i++, offset += 2) {
-    view.setInt16(offset, pcmData[i], true);
-  }
-
-  return new Blob([view], { type: 'audio/wav' });
-}
+// Genre Options for Step 4
+const GENRES = ['Njozi (Fantasy)', 'Sayansi (Sci-Fi)', 'Mahaba (Romance)', 'Siri (Mystery)', 'Elimu (Education)', 'Vichekesho (Comedy)', 'Kutisha (Horror)', 'Adventure (Adventures)', 'Poetry (Mashairi)'];
+const MOODS = ['Furaha (Joyful)', 'Huzuni (Melancholy)', 'Hamasa (Inspiring)', 'Utulivu (Calm)', 'Changamfu (Energetic)', 'Kivutio (Seductive)', 'Giza (Dark)', 'Linalovutia (Suspenseful)'];
 
 export default function AuthorPanel() {
-  const { profile } = useAuth();
+  const { profile, user, language } = useAuth();
+  const t = locales[language || 'sw'];
+
+  const [subTab, setSubTab] = useState<'create' | 'manage'>('create');
+  
+  // --- Story Wizard Configuration States ---
+  const [wizardStep, setWizardStep] = useState(1);
+
+  // Step 1: Story Information
+  const [premise, setPremise] = useState('');
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [genre, setGenre] = useState(GENRES[0]);
-  const [mood, setMood] = useState(MOODS[0]);
-  const [narrationStyle, setNarrationStyle] = useState(NARRATION_STYLES[1]);
-  const [selectedVoice, setSelectedVoice] = useState(VOICES[3].id);
-  
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [storyPrompt, setStoryPrompt] = useState('');
-  const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [writingStyle, setWritingStyle] = useState('styleDramatic'); // Poetic, Suspense, Simple, Dramatic
+  const [targetAudience, setTargetAudience] = useState('audienceTeenagers'); // Children, Teenagers, Adults
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Step 2: Characters Cast
+  const [cast, setCast] = useState<any[]>([]);
+  const [charForm, setCharForm] = useState({
+    name: '',
+    role: 'Hero', // Hero, Villain, Friend, Mentor
+    age: '',
+    gender: 'Male',
+    appearance: '',
+    weaknesses: '',
+    goals: '',
+    relationships: ''
+  });
+  const [isAutocompletingChar, setIsAutocompletingChar] = useState(false);
 
-  // If user is not author or admin, they can still use the AI writer but not publish directly
+  // Step 3: World Building
+  const [world, setWorld] = useState({
+    name: '',
+    locations: '',
+    timePeriod: '',
+    culture: '',
+    rules: '',
+    magicSystem: '',
+    technology: '',
+    environment: ''
+  });
+
+  // Step 4: Literary Genre & General Mood
+  const [mainGenre, setMainGenre] = useState(GENRES[0]);
+  const [selectedSubGenres, setSelectedSubGenres] = useState<string[]>([]);
+  const [selectedMood, setSelectedMood] = useState(MOODS[2]); // Inspiring
+  const [storyLanguage, setStoryLanguage] = useState<Language>(language || 'sw');
+
+  // Step 5: AI Engine Settings
+  const [storyLength, setStoryLength] = useState<'short' | 'medium' | 'long' | 'epic'>('medium');
+  const [illustratedStory, setIllustratedStory] = useState(true);
+  const [visualStyle, setVisualStyle] = useState('Fantasy'); // Anime, Cartoon, Realistic, Fantasy, Children
+
+  // Step 6: Compilation & Progression States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<{
+    chapterIndex: number;
+    totalChapters: number;
+    log: string;
+  }>({ chapterIndex: 0, totalChapters: 0, log: '' });
+
+  // Finished Generated Work State
+  const [generatedChapters, setGeneratedChapters] = useState<any[]>([]);
+  const [generatedTitle, setGeneratedTitle] = useState('');
+  const [generatedCover, setGeneratedCover] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // --- Chapter Management Panel States (SubTab === 'manage') ---
+  const [authorStories, setAuthorStories] = useState<any[]>([]);
+  const [loadingStories, setLoadingStories] = useState(false);
+  const [selectedManageStory, setSelectedManageStory] = useState<any | null>(null);
+  
+  const [chapters, setChapters] = useState<any[]>([]);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [chapterTitle, setChapterTitle] = useState('');
+  const [chapterContent, setChapterContent] = useState('');
+  const [chapterOrder, setChapterOrder] = useState<number>(1);
+  const [isSavingChapter, setIsSavingChapter] = useState(false);
+
   const canPublish = profile?.role === 'author' || profile?.role === 'admin';
 
-  if (!profile) return null;
-
-  const handleGenerateImage = async () => {
-    if (!title || !content) {
-      setMessage({ type: 'error', text: 'Please provide a title and content first.' });
-      return;
+  useEffect(() => {
+    if (subTab === 'manage') {
+      fetchAuthorStories();
     }
-    setIsGeneratingImage(true);
-    setMessage(null);
+  }, [subTab]);
+
+  const fetchAuthorStories = async () => {
+    if (!profile) return;
+    setLoadingStories(true);
+    const path = 'stories';
     try {
-      const prompt = `Immerse yourself as a world-class novelist. Use Swahili if possible or deep English. Title: ${title}. Genre: ${genre}. Mood: ${mood}. Context: ${content.substring(0, 200)}...`;
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: prompt }] },
-      });
-      
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          const base64EncodeString = part.inlineData.data;
-          setImageUrl(`data:image/png;base64,${base64EncodeString}`);
-          break;
-        }
-      }
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Failed to generate image: ' + error.message });
+      const q = query(collection(db, path), where('authorId', '==', profile.uid), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setAuthorStories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.LIST, path);
     } finally {
-      setIsGeneratingImage(false);
+      setLoadingStories(false);
     }
   };
 
-  const handleGenerateAIStory = async () => {
-    if (!storyPrompt && !title) {
-      setMessage({ type: 'error', text: 'Please provide a story idea or a title first.' });
-      return;
-    }
-    setIsGeneratingStory(true);
-    setMessage(null);
+  const fetchChapters = async (storyId: string) => {
+    setLoadingChapters(true);
+    const path = `stories/${storyId}/chapters`;
     try {
-      const prompt = `You are a world-class novelist and professional creative storyteller with the creative depth of Gemini 1.5 Pro and ChatGPT-4. 
-      Your goal is to write a deeply immersive, high-quality, and meaningful story that feels alive.
-      
-      Author's Intent/Context: ${storyPrompt || 'Write an original literary masterpiece'}
-      Title: ${title || 'Suggest a fitting title'}
-      Genre: ${genre}
-      Mood/Atmosphere: ${mood}
-      Narration Style/Perspective: ${narrationStyle}
-      
-      CORE LITERARY INSTRUCTIONS:
-      1. GENRE FAITHFULNESS: Strictly adhere to the tropes and expectations of the ${genre} genre, while adding unique twists.
-      2. MOOD EMBODIMENT: The prose itself must reflect the ${mood} mood. If it's Dark, use shadows and heavy metaphors. If it's Happy, use light and rhythmic sentences.
-      3. NARRATION: Use the ${narrationStyle} perspective consistently. Deeply explore the internal state of characters if it's First Person or Limited Third.
-      4. LENGTH & DETAIL: Write an EXTREMELY long story. We are aiming for a novella-length experience (at least 3-5 full pages of text). NEVER summarize "they went there." Describe the journey, the sights, and the conversations.
-      5. ENVIRONMENTALLY RICH: Spend significant time on world-building and environmental description. The setting should be a character itself.
-      6. THEME: Ensure the story has a deep moral or philosophical dhumuni (purpose).
-      
-      Structure the output as a JSON object: {"title": "The Captured Title", "content": "The full, exhaustive, and deeply detailed story content..."}`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: prompt,
-        config: {
-          systemInstruction: "You are a master novelist. Your writing is expansive, poetic, and structurally sound. You never write short summaries; you write complete books with deep environmental and character analysis."
-        }
-      });
-      
-      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
-      const result = JSON.parse(text);
-      
-      if (result.title) setTitle(result.title);
-      if (result.content) setContent(result.content);
-      setMessage({ type: 'success', text: 'AI amekamilisha kuandika hadithi! Ipungue na kuiboresha hapa chini.' });
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Imeshindwa kutengeneza hadithi: ' + error.message });
+      const q = query(collection(db, path), orderBy('order', 'asc'));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setChapters(list);
+      setChapterOrder(list.length + 1);
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.LIST, path);
     } finally {
-      setIsGeneratingStory(false);
+      setLoadingChapters(false);
     }
   };
 
-  const handleExpandStory = async () => {
-    if (!content) {
-      setMessage({ type: 'error', text: 'Tadhali tengeneza au andika maudhui kwanza.' });
-      return;
-    }
-    setIsGeneratingStory(true);
-    setMessage(null);
+  const handleSelectStoryForChapters = (story: any) => {
+    setSelectedManageStory(story);
+    fetchChapters(story.id);
+  };
+
+  const handleSaveChapter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedManageStory || !chapterTitle.trim() || !chapterContent.trim()) return;
+    setIsSavingChapter(true);
+    const storyId = selectedManageStory.id;
+    const path = editingChapterId 
+      ? `stories/${storyId}/chapters/${editingChapterId}` 
+      : `stories/${storyId}/chapters`;
+      
     try {
-      const prompt = `Current Story Progress (Title: "${title}"):
-      
-      ${content}
-      
-      TASK: Continue and EXPAND this story significantly. 
-      1. Add more depth to the current scene or start the next chapter.
-      2. Focus heavily on character internal monologue and environmental descriptions.
-      3. Ensure it flows perfectly from the last sentence.
-      4. Avoid repetition.
-      
-      Reply with a JSON object: {"content": "The additional story content ONLY to be appended..."}`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: prompt,
-        config: {
-          systemInstruction: "You are a master novelist continuing a work in progress. Your goal is to add more depth, length, and detail without summarizing."
-        }
-      });
-      
-      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
-      const result = JSON.parse(text);
-      
-      if (result.content) {
-        setContent(prev => prev + "\n\n" + result.content);
-        setMessage({ type: 'success', text: 'AI amepanua hadithi yako na kuongeza maelezo zaidi!' });
-      }
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Imeshindwa kupanua hadithi: ' + error.message });
-    } finally {
-      setIsGeneratingStory(false);
-    }
-  };
-
-  const handleGenerateRealWorldStory = async () => {
-    setIsGeneratingStory(true);
-    setMessage(null);
-    try {
-      const prompt = `Search the web for a fascinating recent news event, scientific discovery, or interesting real-world fact. Then, write a creative short story based on this real information. 
-      Reply strictly with a JSON object in this format: {"title": "Story Title", "content": "The story content..."}`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }]
-        }
-      });
-      
-      const text = response.text.trim().replace(/```json/g, '').replace(/```/g, '');
-      const result = JSON.parse(text);
-      
-      if (result.title) setTitle(result.title);
-      if (result.content) setContent(result.content);
-      setMessage({ type: 'success', text: 'Generated a story based on real-world information!' });
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Failed to generate story: ' + error.message });
-    } finally {
-      setIsGeneratingStory(false);
-    }
-  };
-
-  const handleGenerateAudio = async () => {
-    if (!content) {
-      setMessage({ type: 'error', text: 'Please provide content first.' });
-      return;
-    }
-    setIsGeneratingAudio(true);
-    setMessage(null);
-    setAudioFile(null); // Clear any uploaded file
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: content }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: selectedVoice },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const binaryString = atob(base64Audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const pcmData = new Int16Array(bytes.buffer);
-        const wavBlob = createWavBlob(pcmData, 24000);
-        
-        // In a real app, we would upload this Blob to Firebase Storage.
-        // For this demo, we'll store the base64 string directly in Firestore (WARNING: Firestore has a 1MB limit).
-        // To stay within limits, we'll just use the base64 string directly if it's small enough, or simulate it.
-        // Actually, storing base64 audio in Firestore is risky due to 1MB limit.
-        // Let's store it as a data URL for simplicity in this prototype.
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setAudioUrl(reader.result as string);
-        };
-        reader.readAsDataURL(wavBlob);
-      }
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Failed to generate audio: ' + error.message });
-    } finally {
-      setIsGeneratingAudio(false);
-    }
-  };
-
-  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        setMessage({ type: 'error', text: 'Audio file must be less than 10MB.' });
-        return;
-      }
-      setAudioFile(file);
-      setAudioUrl(URL.createObjectURL(file));
-      setMessage(null);
-    }
-  };
-
-  const uploadBase64ToStorage = async (dataUrl: string, path: string) => {
-    try {
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, blob);
-      return await getDownloadURL(storageRef);
-    } catch (error) {
-      console.error("Failed to upload base64 to storage", error);
-      return dataUrl; // fallback, though it might fail Firestore limits if too large
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!title || !content) {
-      setMessage({ type: 'error', text: 'Title and content are required.' });
-      return;
-    }
-    setIsSubmitting(true);
-    setMessage(null);
-    try {
-      let finalAudioUrl = audioUrl;
-      let finalImageUrl = imageUrl;
-
-      // Upload generated image to Storage if it's a base64 data URL
-      if (imageUrl && imageUrl.startsWith('data:image')) {
-        finalImageUrl = await uploadBase64ToStorage(imageUrl, `images/${profile.uid}/${Date.now()}_cover.png`);
-      }
-
-      // If they uploaded a file, try to upload to Firebase Storage
-      if (audioFile) {
-        try {
-          const storageRef = ref(storage, `audio/${profile.uid}/${Date.now()}_${audioFile.name}`);
-          await uploadBytes(storageRef, audioFile);
-          finalAudioUrl = await getDownloadURL(storageRef);
-        } catch (storageError) {
-          console.warn("Firebase Storage upload failed, falling back to base64 if possible", storageError);
-          // Fallback to base64 if storage fails (e.g. missing rules)
-          const reader = new FileReader();
-          finalAudioUrl = await new Promise((resolve) => {
-            reader.onload = (e) => resolve(e.target?.result as string);
-            reader.readAsDataURL(audioFile);
-          });
-        }
-      } else if (audioUrl && audioUrl.startsWith('data:audio')) {
-        // Upload generated audio to Storage if it's a base64 data URL
-        finalAudioUrl = await uploadBase64ToStorage(audioUrl, `audio/${profile.uid}/${Date.now()}_generated.wav`);
-      }
-
-      if (canPublish) {
-        const path = 'stories';
-        try {
-          await addDoc(collection(db, path), {
-            authorId: profile.uid,
-            authorName: profile.displayName,
-            title,
-            content,
-            genre,
-            mood,
-            imageUrl: finalImageUrl || '',
-            audioUrl: finalAudioUrl || '',
-            status: profile.role === 'admin' ? 'approved' : 'pending', // Auto-approve for admins
-            safetyStatus: 'unchecked',
-            createdAt: new Date().toISOString()
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, path);
-        }
-        setMessage({ type: 'success', text: profile.role === 'admin' ? 'Story published successfully!' : 'Story submitted successfully for review!' });
+      if (editingChapterId) {
+        await updateDoc(doc(db, `stories/${storyId}/chapters`, editingChapterId), {
+          title: chapterTitle,
+          content: chapterContent,
+          order: Number(chapterOrder)
+        });
+        setSuccessMessage('Sura imesasishwa kikamilifu!');
       } else {
-        // Regular users save to their personal collection
-        const path = `users/${profile.uid}/savedStories`;
-        try {
-          await addDoc(collection(db, path), {
-            authorId: profile.uid,
-            authorName: profile.displayName,
-            title,
-            content,
-            genre,
-            mood,
-            imageUrl: finalImageUrl || '',
-            audioUrl: finalAudioUrl || '',
-            status: 'draft',
-            safetyStatus: 'unchecked',
-            createdAt: new Date().toISOString(),
-            savedAt: new Date().toISOString()
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, path);
-        }
-        setMessage({ type: 'success', text: 'Story saved to your "Saved Stories" section!' });
+        await addDoc(collection(db, `stories/${storyId}/chapters`), {
+          storyId,
+          title: chapterTitle,
+          content: chapterContent,
+          order: Number(chapterOrder),
+          createdAt: new Date().toISOString()
+        });
+        setSuccessMessage('Sura mpya imeongezwa kikamilifu!');
       }
-      setTitle('');
-      setContent('');
-      setImageUrl(null);
-      setAudioUrl(null);
-      setAudioFile(null);
-    } catch (error: any) {
-      console.error(error);
-      setMessage({ type: 'error', text: 'Failed to submit story: ' + error.message });
+      
+      setChapterTitle('');
+      setChapterContent('');
+      setEditingChapterId(null);
+      fetchChapters(storyId);
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, editingChapterId ? OperationType.UPDATE : OperationType.CREATE, path);
     } finally {
-      setIsSubmitting(false);
+      setIsSavingChapter(false);
     }
   };
+
+  const handleDeleteChapter = async (chapterId: string) => {
+    if (!selectedManageStory) return;
+    if (!window.confirm("Je, una uhakika unataka kufuta sura hii?")) return;
+    const storyId = selectedManageStory.id;
+    const path = `stories/${storyId}/chapters/${chapterId}`;
+    try {
+      await deleteDoc(doc(db, `stories/${storyId}/chapters`, chapterId));
+      setSuccessMessage('Sura imefutwa mafanikio.');
+      fetchChapters(storyId);
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.DELETE, path);
+    }
+  };
+
+  const handleStartEditChapter = (chap: any) => {
+    setEditingChapterId(chap.id);
+    setChapterTitle(chap.title);
+    setChapterContent(chap.content);
+    setChapterOrder(chap.order);
+  };
+
+  const handleCancelEditChapter = () => {
+    setEditingChapterId(null);
+    setChapterTitle('');
+    setChapterContent('');
+    setChapterOrder(chapters.length + 1);
+  };
+
+  // --- Character AI Autocomplete ---
+  const handleAutocompleteCharacter = async () => {
+    if (!charForm.name.trim()) {
+      setErrorMessage("Please enter a character name first.");
+      return;
+    }
+    setIsAutocompletingChar(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch(getApiUrl('/api/ai/generate-character'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: charForm.name,
+          role: charForm.role,
+          age: charForm.age,
+          gender: charForm.gender,
+          personality: charForm.personality,
+          abilities: charForm.abilities,
+          genre: mainGenre
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to autocomplete character.");
+      }
+
+      const data = await response.json();
+      setCharForm(prev => ({
+        ...prev,
+        bio: data.bio || '',
+        appearance: prev.appearance || "A striking individual matching their backstory",
+        weaknesses: prev.weaknesses || "Too trusting of strangers",
+        goals: prev.goals || "To restore peace to their homeland",
+        relationships: prev.relationships || "Loyal companion to allies",
+        abilities: prev.abilities || "Exquisite tactical intellect"
+      }));
+
+      // Add portrait to charForm data
+      (charForm as any).imageUrl = data.imageUrl;
+
+      setSuccessMessage("Character background and portrait autocompleted with AI!");
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("Character autocomplete failed: " + err.message);
+    } finally {
+      setIsAutocompletingChar(false);
+    }
+  };
+
+  const handleAddCharacterToCast = () => {
+    if (!charForm.name.trim()) return;
+    setCast([...cast, { id: Date.now().toString(), ...charForm }]);
+    setCharForm({
+      name: '',
+      role: 'Hero',
+      age: '',
+      gender: 'Male',
+      appearance: '',
+      weaknesses: '',
+      goals: '',
+      relationships: ''
+    });
+    setSuccessMessage("Character added to story cast!");
+  };
+
+  const handleRemoveCharacterFromCast = (id: string) => {
+    setCast(cast.filter(c => c.id !== id));
+  };
+
+  const handleNextStep = () => {
+    if (wizardStep === 1 && !premise.trim()) {
+      setErrorMessage("Story premise is required to formulate the plot!");
+      return;
+    }
+    setErrorMessage('');
+    setWizardStep(prev => prev + 1);
+  };
+
+  const handlePrevStep = () => {
+    setErrorMessage('');
+    setWizardStep(prev => prev - 1);
+  };
+
+  // --- Wizard Step 6: Progressive Story Generation ---
+  const handleBeginStoryGeneration = async () => {
+    setIsGenerating(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    setGeneratedChapters([]);
+    
+    let totalChapters = 2;
+    if (storyLength === 'short') totalChapters = 2;
+    else if (storyLength === 'medium') totalChapters = 3;
+    else if (storyLength === 'long') totalChapters = 4;
+    else if (storyLength === 'epic') totalChapters = 5;
+
+    setGenerationProgress({
+      chapterIndex: 0,
+      totalChapters,
+      log: 'Initializing professional AI Writer engine...'
+    });
+
+    const accumulatedChapters: any[] = [];
+    let bookTitle = title || '';
+
+    try {
+      for (let i = 1; i <= totalChapters; i++) {
+        setGenerationProgress(prev => ({
+          ...prev,
+          chapterIndex: i,
+          log: `AI Novelist is composing Chapter ${i} of ${totalChapters}... Please wait, writing detailed narrative prose.`
+        }));
+
+        // Call server API for chapter generation
+        const chapterRes = await fetch(getApiUrl('/api/ai/generate-chapter'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            premise,
+            title: bookTitle,
+            genre: mainGenre,
+            mood: selectedMood,
+            style: writingStyle,
+            audience: targetAudience,
+            characters: cast,
+            world,
+            chapterNumber: i,
+            totalChapters,
+            previousChapters: accumulatedChapters.map(c => ({
+              chapterNumber: c.order,
+              title: c.title,
+              content: c.content
+            })),
+            language: storyLanguage,
+            visualStyle
+          })
+        });
+
+        if (!chapterRes.ok) {
+          throw new Error(`Failed to generate Chapter ${i}.`);
+        }
+
+        const chapterData = await chapterRes.json();
+        if (i === 1 && !bookTitle) {
+          bookTitle = chapterData.title || 'AI Masterpiece';
+        }
+
+        let chapterImageUrl = '';
+        if (illustratedStory && chapterData.imagePrompt) {
+          setGenerationProgress(prev => ({
+            ...prev,
+            log: `Chapter ${i} written successfully! Now painting illustration using "${visualStyle}" art style...`
+          }));
+
+          const imgRes = await fetch(getApiUrl('/api/ai/generate-chapter-illustration'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imagePrompt: chapterData.imagePrompt,
+              visualStyle
+            })
+          });
+
+          if (imgRes.ok) {
+            const imgData = await imgRes.json();
+            chapterImageUrl = imgData.imageUrl;
+          }
+        }
+
+        accumulatedChapters.push({
+          order: i,
+          title: chapterData.title || `Chapter ${i}`,
+          content: chapterData.content || '',
+          imageUrl: chapterImageUrl || ''
+        });
+
+        setGeneratedChapters([...accumulatedChapters]);
+      }
+
+      setGeneratedTitle(bookTitle || 'Siri ya Hadithi');
+      // Set book cover image to the first chapter's illustration
+      if (accumulatedChapters[0]?.imageUrl) {
+        setGeneratedCover(accumulatedChapters[0].imageUrl);
+      }
+
+      setGenerationProgress(prev => ({
+        ...prev,
+        log: 'Polishing literary prose, checking structural compliance, and completing compilation!'
+      }));
+
+      setSuccessMessage("Your multi-chapter professional book has been successfully crafted!");
+      setWizardStep(7); // Show finished preview
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("Generation failed: " + err.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // --- Save / Publish Compiled Book ---
+  const handleSaveAndPublishCompiledStory = async (isDraft: boolean) => {
+    if (!generatedTitle || generatedChapters.length === 0) return;
+    setIsSaving(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      let finalCover = generatedCover;
+
+      // Prepare story data
+      const storyPayload = {
+        authorId: profile?.uid || user?.uid || 'anonymous',
+        authorName: profile?.displayName || 'Author AI',
+        title: generatedTitle,
+        content: generatedChapters[0]?.content?.substring(0, 500) + "...", // Intro summary
+        genre: mainGenre,
+        mood: selectedMood,
+        imageUrl: finalCover || '',
+        status: isDraft ? 'draft' : (profile?.role === 'admin' ? 'approved' : 'pending'),
+        safetyStatus: 'unchecked',
+        createdAt: new Date().toISOString()
+      };
+
+      // Add to Firestore stories collection
+      const storiesRef = collection(db, 'stories');
+      const docRef = await addDoc(storiesRef, storyPayload);
+
+      // Now create each chapter in subcollection
+      for (const chap of generatedChapters) {
+        await addDoc(collection(db, `stories/${docRef.id}/chapters`), {
+          storyId: docRef.id,
+          title: chap.title,
+          content: chap.content,
+          imageUrl: chap.imageUrl || '',
+          order: chap.order,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      setSuccessMessage(isDraft ? t.draftSuccess : t.publishSuccess);
+      // Reset wizard
+      setWizardStep(1);
+      setPremise('');
+      setTitle('');
+      setCast([]);
+      setGeneratedChapters([]);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("Failed to save and persist story: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 text-center text-slate-500">
+        <Loader2 className="animate-spin text-indigo-600 mb-4" size={48} />
+        <p className="text-xl font-bold">Inapakia profile...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors animate-in fade-in duration-500">
-      <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-10 flex items-center gap-4">
-        <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-600/20">
-          {canPublish ? <BookOpen size={32} /> : <Mic size={32} />}
+    <div className="max-w-6xl mx-auto bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-colors animate-in fade-in duration-500">
+      
+      {/* Header Panel */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 dark:border-slate-800 pb-8 mb-8 gap-6">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <BookOpen className="text-indigo-600 dark:text-indigo-400 animate-pulse" size={40} />
+            {t.wizardTitle}
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{t.wizardSubtitle}</p>
         </div>
-        {canPublish ? 'Tunga Hadithi Mpya' : 'AI Story Writer'}
-      </h1>
 
-      {!canPublish && (
-        <div className="mb-10 p-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-[1.5rem] text-amber-800 dark:text-amber-300">
-          <p className="font-black mb-2 flex items-center gap-2 text-lg">
-            <Shield size={20} /> Huduma ya Maandishi ya AI
-          </p>
-          <p className="leading-relaxed">Unaweza kutumia injini ya AI kutengeneza hadishi zako binafsi. Hadithi hizi zitahifadhiwa kwenye maktaba yako ya "Saved Stories". Ikiwa unataka kuchapisha hadithi kwa wasomaji wote, tafadhali omba ruhusa ya kuwa Mwandishi (Author) kwenye profaili yako.</p>
+        {/* Tab Selection */}
+        {canPublish && (
+          <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setSubTab('create')}
+              className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${subTab === 'create' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              Uandishi Mpya (Wizard)
+            </button>
+            <button
+              onClick={() => setSubTab('manage')}
+              className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${subTab === 'manage' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              Simamia Sura (Chapters)
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Alert Messages */}
+      {successMessage && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400 p-6 rounded-2xl mb-8 border border-emerald-100 dark:border-emerald-900/40 flex items-center gap-3 font-bold">
+          <CheckCircle2 size={24} />
+          {successMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-400 p-6 rounded-2xl mb-8 border border-rose-100 dark:border-rose-900/40 flex items-center gap-3 font-bold">
+          <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+          {errorMessage}
         </div>
       )}
 
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-          {message.text}
-        </div>
-      )}
-
-      <div className="space-y-6">
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-950 dark:to-indigo-950/20 p-8 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/40 space-y-6 shadow-inner transition-colors">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
-              <Send size={24} />
-            </div>
-            <h3 className="font-black text-indigo-900 dark:text-indigo-300 text-xl">AI Story Generator</h3>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-black text-indigo-700 dark:text-indigo-400 mb-3 uppercase tracking-widest">Hadithi yako inahusu nini? (Dhumuni/Wazo)</label>
-            <textarea 
-              value={storyPrompt}
-              onChange={(e) => setStoryPrompt(e.target.value)}
-              className="w-full p-5 bg-white/90 dark:bg-slate-900/90 border border-indigo-200 dark:border-indigo-900/40 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-32 dark:text-white text-lg transition-all"
-              placeholder="Mfano: Hadithi ya kijana anayegundua siri ya zamani iliyojificha kwenye msitu wa giza..."
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
-            <button 
-              onClick={handleGenerateAIStory}
-              disabled={isGeneratingStory}
-              className="w-full sm:w-auto bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2 active:scale-95"
-            >
-              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <BookOpen size={24} />}
-              Andika Hadithi Kamili (Master AI)
-            </button>
-            <button 
-              onClick={handleExpandStory}
-              disabled={isGeneratingStory || !content}
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-xl shadow-amber-600/20 flex items-center justify-center gap-2 active:scale-95"
-              title="Ongeza sura mpya na undani zaidi"
-            >
-              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
-              Panua Hadithi (Expand)
-            </button>
-            <button 
-              onClick={handleGenerateRealWorldStory}
-              disabled={isGeneratingStory}
-              className="w-full sm:w-auto bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/40 px-8 py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 active:scale-95"
-            >
-              {isGeneratingStory ? <Loader2 size={24} className="animate-spin" /> : <Globe size={24} />}
-              Daily Inspiration
-            </button>
-          </div>
-          <p className="text-xs text-indigo-500 dark:text-indigo-400/60 italic font-medium">Inatumia teknolojia ya kisasa ya Maandishi ya Gemini 3.1 Pro kwa matokeo bora zaidi.</p>
-        </div>
-
+      {/* ==================== SUBTAB: CREATE (WIZARD FLOW) ==================== */}
+      {subTab === 'create' && (
         <div>
-          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Kichwa cha Hadithi (Title)</label>
-          <input 
-            type="text" 
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-xl font-bold dark:text-white transition-colors"
-            placeholder="Weka jina la hadithi..."
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Aina (Genre)</label>
-            <select 
-              value={genre}
-              onChange={(e) => setGenre(e.target.value)}
-              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
-            >
-              {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Mood</label>
-            <select 
-              value={mood}
-              onChange={(e) => setMood(e.target.value)}
-              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
-            >
-              {MOODS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-widest">Style</label>
-            <select 
-              value={narrationStyle}
-              onChange={(e) => setNarrationStyle(e.target.value)}
-              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white font-bold transition-colors"
-            >
-              {NARRATION_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">Maudhui (Content)</label>
-          <textarea 
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full h-80 p-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2rem] focus:ring-2 focus:ring-indigo-500 outline-none resize-none dark:text-white text-xl font-serif leading-relaxed transition-colors scrollbar-thin dark:scrollbar-thumb-slate-700"
-            placeholder="Andika hadithi yako hapa..."
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-widest">
-            <Mic size={20} className="text-indigo-500" />
-            Sauti ya Masimulizi (Narration)
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {VOICES.map((voice) => {
-              const isSelected = selectedVoice === voice.id;
-              return (
-                <button
-                  key={voice.id}
-                  onClick={() => setSelectedVoice(voice.id)}
-                  className={`text-left p-5 rounded-2xl border-2 transition-all relative overflow-hidden group ${
-                    isSelected 
-                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 shadow-md ring-2 ring-indigo-500/10' 
-                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  {isSelected && (
-                    <div className="absolute top-4 right-4 text-indigo-600 dark:text-indigo-400">
-                      <CheckCircle2 size={20} />
-                    </div>
-                  )}
-                  <div className={`font-black mb-1 text-lg ${isSelected ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-300'}`}>
-                    {voice.label}
+          {/* Steps Progress Visual Bar */}
+          {wizardStep <= 6 && (
+            <div className="mb-12">
+              <div className="grid grid-cols-6 gap-2 text-center text-xs font-black uppercase tracking-wider text-slate-400">
+                {[1, 2, 3, 4, 5, 6].map((step) => (
+                  <div key={step} className="flex flex-col items-center">
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center border font-bold transition-all mb-2 ${wizardStep === step ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/30' : wizardStep > step ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                      {step}
+                    </span>
+                    <span className={`hidden md:inline ${wizardStep === step ? 'text-indigo-600 dark:text-indigo-400 font-black' : ''}`}>
+                      {t[`step${step}` as keyof typeof t] || `Step ${step}`}
+                    </span>
                   </div>
-                  <div className={`text-xs font-bold ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>
-                    {voice.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-100 dark:border-slate-800">
-          {/* Image Generation */}
-          <div className="space-y-4">
-            <button 
-              onClick={handleGenerateImage}
-              disabled={isGeneratingImage}
-              className="w-full flex items-center justify-center gap-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-4 rounded-2xl font-black transition-all active:scale-95"
-            >
-              {isGeneratingImage ? <Loader2 size={24} className="animate-spin" /> : <ImageIcon size={24} />}
-              Tengeneza Picha ya Jalada
-            </button>
-            {imageUrl && (
-              <img src={imageUrl} alt="Generated Cover" className="w-full h-64 object-cover rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-lg animate-in fade-in duration-500" />
-            )}
-          </div>
-
-          {/* Audio Generation / Upload */}
-          <div className="space-y-4">
-            <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-widest">Sauti (Audio Narration)</label>
-            <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-2 border-dashed border-slate-300 dark:border-slate-800 space-y-6 transition-colors">
-              <div className="flex flex-col gap-4">
-                <button 
-                  onClick={handleGenerateAudio}
-                  disabled={isGeneratingAudio}
-                  className="w-full flex items-center justify-center gap-3 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-6 py-4 rounded-2xl font-black transition-all text-sm border border-indigo-200 dark:border-indigo-900/30 shadow-sm active:scale-95"
-                >
-                  {isGeneratingAudio ? <Loader2 size={20} className="animate-spin" /> : <Mic size={20} />}
-                  Tengeneza Sauti ya AI
-                </button>
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-6 py-4 rounded-2xl font-black transition-all text-sm border border-slate-200 dark:border-slate-800 shadow-sm active:scale-95"
-                >
-                  <Upload size={20} className="text-indigo-600 dark:text-indigo-400" />
-                  Pakia Sauti (Upload)
-                </button>
-                <input 
-                  type="file" 
-                  accept="audio/*" 
-                  className="hidden" 
-                  ref={fileInputRef}
-                  onChange={handleAudioUpload}
+                ))}
+              </div>
+              <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full mt-6 overflow-hidden">
+                <div 
+                  className="h-full bg-indigo-600 transition-all duration-500" 
+                  style={{ width: `${((wizardStep - 1) / 5) * 100}%` }}
                 />
               </div>
-              
-              {audioUrl ? (
-                <div className="space-y-3 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-inner">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sikiliza Preview</span>
-                    {audioFile && <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-3 py-1 rounded-full font-black">Uploaded</span>}
+            </div>
+          )}
+
+          {/* STEP 1: Story Information */}
+          {wizardStep === 1 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <h3 className="text-2xl font-black mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                  <Sparkles className="text-indigo-600" />
+                  {t.storyIdeaPremise}
+                </h3>
+                <p className="text-sm text-slate-500 mb-6">{t.storyIdeaPremisePlaceholder}</p>
+                <textarea
+                  required
+                  value={premise}
+                  onChange={(e) => setPremise(e.target.value)}
+                  className="w-full p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[2rem] outline-none focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-950 text-lg dark:text-white font-medium h-40 resize-none transition-all"
+                  placeholder="Elezea wazo lako kuu au jinsi gani mwanzo wa hadithi unapaswa kuwa..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">{t.storyTitlePref}</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-lg dark:text-white font-bold transition-all"
+                    placeholder={t.storyTitlePlaceholder}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">{t.writingStyle}</label>
+                  <select
+                    value={writingStyle}
+                    onChange={(e) => setWritingStyle(e.target.value)}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-lg dark:text-white font-bold transition-all"
+                  >
+                    <option value="stylePoetic">{t.stylePoetic}</option>
+                    <option value="styleSuspense">{t.styleSuspense}</option>
+                    <option value="styleSimple">{t.styleSimple}</option>
+                    <option value="styleDramatic">{t.styleDramatic}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  onClick={handleNextStep}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  {t.next} <ArrowRight size={20} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Character Creation */}
+          {wizardStep === 2 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <h3 className="text-2xl font-black mb-2 text-slate-800 dark:text-slate-100">{t.charSetupTitle}</h3>
+                <p className="text-sm text-slate-500">{t.charSetupSubtitle}</p>
+              </div>
+
+              {/* Added characters list */}
+              {cast.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {cast.map((c) => (
+                    <div key={c.id} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between group relative overflow-hidden">
+                      <div>
+                        {c.imageUrl && (
+                          <img src={c.imageUrl} alt={c.name} className="w-16 h-16 rounded-full object-cover mb-4 ring-4 ring-indigo-50 shadow-md" />
+                        )}
+                        <h4 className="font-black text-lg text-slate-900 dark:text-white">{c.name}</h4>
+                        <span className="inline-block text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md mt-1 mb-3">{c.role}</span>
+                        <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed mt-2">{c.bio || c.appearance}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveCharacterFromCast(c.id)}
+                        className="absolute top-4 right-4 p-2 bg-rose-50 text-rose-500 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-100"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Form to add a character */}
+              <div className="border border-slate-100 dark:border-slate-800 rounded-3xl p-8 space-y-6">
+                <h4 className="text-xl font-black flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                  <Plus className="text-indigo-600" /> Unda na Ongeza Mhusika Mpya
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.charName}</label>
+                    <input
+                      type="text"
+                      value={charForm.name}
+                      onChange={(e) => setCharForm({...charForm, name: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                      placeholder="e.g., Juma, Sarah"
+                    />
                   </div>
-                  <audio controls src={audioUrl} className="w-full h-12" />
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.charRole}</label>
+                    <select
+                      value={charForm.role}
+                      onChange={(e) => setCharForm({...charForm, role: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                    >
+                      <option value="Hero">{t.charRoleHero}</option>
+                      <option value="Villain">{t.charRoleVillain}</option>
+                      <option value="Friend">{t.charRoleFriend}</option>
+                      <option value="Mentor">{t.charRoleMentor}</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      disabled={isAutocompletingChar || !charForm.name.trim()}
+                      onClick={handleAutocompleteCharacter}
+                      className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 font-black p-4 rounded-2xl transition-all border border-indigo-100/40 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                    >
+                      {isAutocompletingChar ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
+                      Kamilisha wasifu na Picha kwa AI
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.charAppearance}</label>
+                    <textarea
+                      value={charForm.appearance}
+                      onChange={(e) => setCharForm({...charForm, appearance: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-24 resize-none font-medium dark:text-white"
+                      placeholder="Mrefu, amevalia kanzu ya kijivu, macho yenye mwangaza..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.charWeaknesses}</label>
+                    <textarea
+                      value={charForm.weaknesses}
+                      onChange={(e) => setCharForm({...charForm, weaknesses: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-24 resize-none font-medium dark:text-white"
+                      placeholder="Mwepesi wa hasira, anaamini kila mtu..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleAddCharacterToCast}
+                    disabled={!charForm.name.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-3 rounded-xl transition-all shadow-md flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                  >
+                    <Plus size={18} /> {t.addCharBtn}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-2xl transition-all flex items-center gap-2"
+                >
+                  <ArrowLeft size={20} /> {t.prev}
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  disabled={cast.length === 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {t.next} <ArrowRight size={20} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: World Building */}
+          {wizardStep === 3 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <h3 className="text-2xl font-black mb-2 text-slate-800 dark:text-slate-100">{t.worldBuildingTitle}</h3>
+                <p className="text-sm text-slate-500">{t.worldBuildingSubtitle}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldName}</label>
+                  <input
+                    type="text"
+                    value={world.name}
+                    onChange={(e) => setWorld({...world, name: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                    placeholder="e.g., Milima ya Giza, Kisiwa cha Kwanza"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldTimePeriod}</label>
+                  <input
+                    type="text"
+                    value={world.timePeriod}
+                    onChange={(e) => setWorld({...world, timePeriod: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                    placeholder="e.g., Zama za Kati, Nyakati za Kale"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldCulture}</label>
+                  <textarea
+                    value={world.culture}
+                    onChange={(e) => setWorld({...world, culture: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-28 resize-none font-medium dark:text-white"
+                    placeholder="Mila na tamaduni za ulimwengu huu..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldRules}</label>
+                  <textarea
+                    value={world.rules}
+                    onChange={(e) => setWorld({...world, rules: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-28 resize-none font-medium dark:text-white"
+                    placeholder="Sheria za maisha, fizikia au miiko ya jamii..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldMagicSystem}</label>
+                  <textarea
+                    value={world.magicSystem}
+                    onChange={(e) => setWorld({...world, magicSystem: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-28 resize-none font-medium dark:text-white"
+                    placeholder="Mihuri, uganga, au sayansi iliyopitiliza ya miujiza..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.worldEnvironment}</label>
+                  <textarea
+                    value={world.environment}
+                    onChange={(e) => setWorld({...world, environment: e.target.value})}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 h-28 resize-none font-medium dark:text-white"
+                    placeholder="Hali ya hewa, milima, vyanzo vya maji na mazingira..."
+                  />
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-2xl transition-all flex items-center gap-2"
+                >
+                  <ArrowLeft size={20} /> {t.prev}
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 hover:-translate-y-0.5"
+                >
+                  {t.next} <ArrowRight size={20} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Literary Genre & General Mood */}
+          {wizardStep === 4 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <h3 className="text-2xl font-black mb-2 text-slate-800 dark:text-slate-100">{t.genreMoodTitle}</h3>
+                <p className="text-sm text-slate-500">{t.genreMoodSubtitle}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">{t.mainGenreLabel}</label>
+                  <select
+                    value={mainGenre}
+                    onChange={(e) => setMainGenre(e.target.value)}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                  >
+                    {GENRES.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">{t.moodLabel}</label>
+                  <select
+                    value={selectedMood}
+                    onChange={(e) => setSelectedMood(e.target.value)}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                  >
+                    {MOODS.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-widest">{t.languageLabel}</label>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setStoryLanguage('sw')}
+                    className={`flex-1 p-4 rounded-2xl border font-black transition-all flex items-center justify-center gap-2 ${storyLanguage === 'sw' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                  >
+                    <Globe size={18} /> Swahili (Kiswahili kisanifu)
+                  </button>
+                  <button
+                    onClick={() => setStoryLanguage('en')}
+                    className={`flex-1 p-4 rounded-2xl border font-black transition-all flex items-center justify-center gap-2 ${storyLanguage === 'en' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                  >
+                    <Globe size={18} /> English (US / UK Literary)
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-2xl transition-all flex items-center gap-2"
+                >
+                  <ArrowLeft size={20} /> {t.prev}
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 hover:-translate-y-0.5"
+                >
+                  {t.next} <ArrowRight size={20} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 5: AI Engine Settings */}
+          {wizardStep === 5 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                <h3 className="text-2xl font-black mb-2 text-slate-800 dark:text-slate-100">{t.aiOptionsTitle}</h3>
+                <p className="text-sm text-slate-500">{t.aiOptionsSubtitle}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-black text-slate-700 dark:text-slate-300 mb-4 uppercase tracking-widest">{t.storyLengthLabel}</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setStoryLength('short')}
+                    className={`p-6 rounded-2xl border text-left transition-all flex flex-col justify-between ${storyLength === 'short' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 ring-2 ring-indigo-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}
+                  >
+                    <span className="font-black text-lg text-slate-800 dark:text-slate-100">Hadithi Fupi</span>
+                    <p className="text-xs text-slate-400 mt-2">{t.lengthShort}</p>
+                  </button>
+                  <button
+                    onClick={() => setStoryLength('medium')}
+                    className={`p-6 rounded-2xl border text-left transition-all flex flex-col justify-between ${storyLength === 'medium' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 ring-2 ring-indigo-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}
+                  >
+                    <span className="font-black text-lg text-slate-800 dark:text-slate-100">Hadithi ya Kati</span>
+                    <p className="text-xs text-slate-400 mt-2">{t.lengthMedium}</p>
+                  </button>
+                  <button
+                    onClick={() => setStoryLength('long')}
+                    className={`p-6 rounded-2xl border text-left transition-all flex flex-col justify-between ${storyLength === 'long' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 ring-2 ring-indigo-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}
+                  >
+                    <span className="font-black text-lg text-slate-800 dark:text-slate-100">Hadithi Ndefu</span>
+                    <p className="text-xs text-slate-400 mt-2">{t.lengthLong}</p>
+                  </button>
+                  <button
+                    onClick={() => setStoryLength('epic')}
+                    className={`p-6 rounded-2xl border text-left transition-all flex flex-col justify-between ${storyLength === 'epic' ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/40 ring-2 ring-indigo-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}
+                  >
+                    <span className="font-black text-lg text-slate-800 dark:text-slate-100">Riwaya ya Kijasiri (Epic Novel)</span>
+                    <p className="text-xs text-slate-400 mt-2">{t.lengthEpic}</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Illustrated story configuration */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-[2rem] p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-lg text-slate-800 dark:text-slate-100">{t.illustratedStoryLabel}</h4>
+                    <p className="text-sm text-slate-500 mt-1">{t.illustratedStoryDesc}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={illustratedStory}
+                    onChange={(e) => setIllustratedStory(e.target.checked)}
+                    className="w-12 h-6 bg-slate-200 rounded-full cursor-pointer relative appearance-none checked:bg-indigo-600 transition-all after:content-[''] after:absolute after:w-5 after:h-5 after:rounded-full after:bg-white after:top-0.5 after:left-0.5 checked:after:left-6.5 after:transition-all"
+                  />
+                </div>
+
+                {illustratedStory && (
+                  <div className="pt-6 border-t border-slate-200/50 dark:border-slate-700/50">
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-3">{t.visualStyleLabel}</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                      {[
+                        { id: 'Anime', label: t.styleAnime },
+                        { id: 'Cartoon', label: t.styleCartoon },
+                        { id: 'Realistic', label: t.styleRealistic },
+                        { id: 'Fantasy', label: t.styleFantasy },
+                        { id: 'Children', label: t.styleChildren }
+                      ].map((styleOption) => (
+                        <button
+                          key={styleOption.id}
+                          onClick={() => setVisualStyle(styleOption.id)}
+                          className={`p-4 rounded-xl border font-black text-xs transition-all text-center ${visualStyle === styleOption.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                        >
+                          {styleOption.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-2xl transition-all flex items-center gap-2"
+                >
+                  <ArrowLeft size={20} /> {t.prev}
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 hover:-translate-y-0.5"
+                >
+                  {t.next} <ArrowRight size={20} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 6: Review & Final Synthesis */}
+          {wizardStep === 6 && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 text-center">
+                <h3 className="text-3xl font-black mb-2 text-slate-800 dark:text-slate-100">{t.compileTitle}</h3>
+                <p className="text-sm text-slate-500 max-w-lg mx-auto">{t.compileSubtitle}</p>
+              </div>
+
+              {/* Review card summary */}
+              <div className="bg-slate-50 dark:bg-slate-800/30 rounded-3xl border border-slate-100 dark:border-slate-800 p-8 space-y-6">
+                <h4 className="text-xl font-black text-indigo-600 dark:text-indigo-400 border-b border-slate-100 dark:border-slate-800 pb-4">Story configuration overview</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                  <p><strong>Wazo la Hadithi:</strong> {premise}</p>
+                  <p><strong>Title:</strong> {title || 'Uamuzi wa AI'}</p>
+                  <p><strong>Genre & Mood:</strong> {mainGenre} • {selectedMood}</p>
+                  <p><strong>Language:</strong> {storyLanguage === 'en' ? 'English' : 'Kiswahili kisanifu'}</p>
+                  <p><strong>Cast count:</strong> {cast.length} characters added</p>
+                  <p><strong>Style:</strong> {visualStyle} Illustrated ({storyLength} chapters)</p>
+                </div>
+              </div>
+
+              {/* Composition Progressive Log UI */}
+              {isGenerating && (
+                <div className="bg-slate-900 text-slate-100 p-8 rounded-[2rem] border border-slate-800 space-y-6 animate-pulse">
+                  <div className="flex items-center gap-4">
+                    <Loader2 className="animate-spin text-indigo-400" size={32} />
+                    <div>
+                      <h4 className="font-bold text-lg text-white">{t.generatingNovelist}</h4>
+                      <p className="text-xs text-slate-400">Chapter {generationProgress.chapterIndex} of {generationProgress.totalChapters}</p>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 font-mono text-xs text-indigo-300/90 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto">
+                    {generationProgress.log}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                <button
+                  disabled={isGenerating}
+                  onClick={handlePrevStep}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-2xl transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <ArrowLeft size={20} /> {t.prev}
+                </button>
+                <button
+                  disabled={isGenerating}
+                  onClick={handleBeginStoryGeneration}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black px-12 py-5 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 active:scale-95 hover:brightness-110 disabled:opacity-50 text-lg"
+                >
+                  {isGenerating ? <Loader2 className="animate-spin" size={24} /> : <Wand2 size={24} />}
+                  {t.startGenerationBtn}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 7: Completed Book Preview and Save / Publish */}
+          {wizardStep === 7 && (
+            <div className="space-y-10 animate-in fade-in duration-500">
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-8 rounded-[2.5rem] text-center border border-slate-100 dark:border-slate-800">
+                <h3 className="text-3xl font-black text-emerald-600 mb-2 flex items-center justify-center gap-2">
+                  <CheckCircle2 /> Kitabu Kimeandikwa Kikamilifu!
+                </h3>
+                <p className="text-slate-500 max-w-md mx-auto">Tazama kazi ya uandishi ya AI hapa chini na uchague hatua ya kuihifadhi kwenye Maktaba.</p>
+              </div>
+
+              {/* Story visual representation */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 md:p-12 rounded-[3rem] shadow-lg max-w-4xl mx-auto space-y-12">
+                <div className="text-center">
+                  <h2 className="text-4xl font-black text-slate-900 dark:text-white leading-tight">{generatedTitle}</h2>
+                  <p className="text-slate-400 uppercase tracking-widest text-xs font-black mt-2">Kazi ya Fasihi • Mwandishi: AI Novelist</p>
+                </div>
+
+                {generatedCover && (
+                  <img src={generatedCover} alt="Story cover" className="w-full h-96 object-cover rounded-[2rem] shadow-md" />
+                )}
+
+                {/* Chapter by chapter scroll */}
+                <div className="space-y-16">
+                  {generatedChapters.map((chap, idx) => (
+                    <div key={idx} className="border-t border-slate-100 dark:border-slate-800 pt-10 space-y-8">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                          Sura ya {chap.order}: {chap.title}
+                        </h3>
+                      </div>
+
+                      {chap.imageUrl && (
+                        <img src={chap.imageUrl} alt={chap.title} className="w-full h-80 object-cover rounded-2xl shadow-sm" />
+                      )}
+
+                      <div className="prose prose-indigo dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
+                        {chap.content.split('\n\n').map((para: string, pIdx: number) => (
+                          <p key={pIdx} className="mb-6 text-xl leading-relaxed font-serif">{para}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit panel */}
+              <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-4 justify-end">
+                <button
+                  onClick={() => setWizardStep(1)}
+                  disabled={isSaving}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-8 py-4 rounded-xl transition-all disabled:opacity-50"
+                >
+                  Unda Kitabu Kingine
+                </button>
+
+                <button
+                  onClick={() => handleSaveAndPublishCompiledStory(true)}
+                  disabled={isSaving}
+                  className="bg-amber-500 hover:bg-amber-600 text-white font-black px-8 py-4 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" /> : t.saveDraftBtn}
+                </button>
+
+                {canPublish && (
+                  <button
+                    onClick={() => handleSaveAndPublishCompiledStory(false)}
+                    disabled={isSaving}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 py-4 rounded-xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 className="animate-spin" /> : t.saveAndPublishBtn}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================== SUBTAB: MANAGE (CHAPTERS MANAGER) ==================== */}
+      {subTab === 'manage' && (
+        <div className="space-y-10 animate-in fade-in duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            {/* Story selector column */}
+            <div className="border-r border-slate-100 dark:border-slate-800 pr-4 space-y-4">
+              <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg uppercase tracking-wider mb-4">Mkusanyiko wa Vitabu Zako</h3>
+              {loadingStories ? (
+                <div className="py-10 text-center"><Loader2 className="animate-spin text-indigo-600 mx-auto" /></div>
+              ) : authorStories.length === 0 ? (
+                <p className="text-sm text-slate-400">Bado haujachapisha kitabu chochote.</p>
+              ) : (
+                <div className="space-y-3">
+                  {authorStories.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSelectStoryForChapters(s)}
+                      className={`w-full text-left p-4 rounded-xl font-bold text-sm transition-all border ${selectedManageStory?.id === s.id ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-500 hover:bg-slate-100'}`}
+                    >
+                      {s.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Chapters management column */}
+            <div className="md:col-span-2 space-y-8">
+              {selectedManageStory ? (
+                <div className="space-y-8">
+                  <div className="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                    <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">Vipengele vya: {selectedManageStory.title}</h3>
+                    <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Hariri, ongeza, au futa sura mbalimbali za hadithi hii.</p>
+                  </div>
+
+                  {/* Chapters List */}
+                  {loadingChapters ? (
+                    <div className="py-10 text-center"><Loader2 className="animate-spin text-indigo-600 mx-auto" /></div>
+                  ) : chapters.length === 0 ? (
+                    <p className="text-sm text-slate-400 bg-slate-50 p-6 rounded-xl border border-dashed border-slate-200">Kitabu hiki bado hakina sura zozote zilizohifadhiwa.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {chapters.map((chap) => (
+                        <div key={chap.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 hover:bg-slate-50 transition-all">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">Chapter {chap.order}</span>
+                            <h4 className="font-bold text-slate-800 dark:text-white mt-1.5">{chap.title}</h4>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleStartEditChapter(chap)}
+                              className="px-3.5 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg hover:bg-indigo-100 transition-all"
+                            >
+                              Hariri
+                            </button>
+                            <button
+                              onClick={() => handleDeleteChapter(chap.id)}
+                              className="p-1.5 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add / Edit Chapter Form */}
+                  <form onSubmit={handleSaveChapter} className="border border-slate-100 dark:border-slate-800 rounded-3xl p-8 space-y-6">
+                    <h4 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                      {editingChapterId ? 'Hariri Sura Iliyopo' : 'Ongeza Sura Mpya (Manual Add)'}
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      <div className="md:col-span-3">
+                        <label className="block text-xs font-black text-slate-400 uppercase mb-2">Kichwa cha Sura (Chapter Title)</label>
+                        <input
+                          type="text"
+                          required
+                          value={chapterTitle}
+                          onChange={(e) => setChapterTitle(e.target.value)}
+                          className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                          placeholder="e.g., Kuingia Kwenye Pango la Ajabu"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 uppercase mb-2">Sura ya ngapi? (Order)</label>
+                        <input
+                          type="number"
+                          required
+                          value={chapterOrder}
+                          onChange={(e) => setChapterOrder(Number(e.target.value))}
+                          className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">Maudhui ya Sura (Content)</label>
+                      <textarea
+                        required
+                        value={chapterContent}
+                        onChange={(e) => setChapterContent(e.target.value)}
+                        className="w-full p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2rem] outline-none focus:ring-2 focus:ring-indigo-500 h-64 resize-none font-medium dark:text-white leading-relaxed"
+                        placeholder="Andika riwaya au simulizi ya sura hii..."
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                      {editingChapterId && (
+                        <button
+                          type="button"
+                          onClick={handleCancelEditChapter}
+                          className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black px-6 py-3 rounded-xl transition-all"
+                        >
+                          Ghairi (Cancel)
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={isSavingChapter}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-3 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                      >
+                        {isSavingChapter && <Loader2 className="animate-spin" size={16} />}
+                        {editingChapterId ? 'Hifadhi Mabadiliko' : 'Ongeza Sura'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               ) : (
-                <div className="py-6 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-600 font-bold">Hakuna sauti. Tengeneza na AI au pakia faili lako.</p>
+                <div className="py-20 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/20 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
+                  <BookOpen size={48} className="mx-auto opacity-20 mb-4" />
+                  <p className="font-bold text-lg text-slate-600 dark:text-slate-400">Tafadhali chagua kitabu upande wa kushoto ili kusimamia sura zake.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
-
-        <div className="pt-10">
-          <button 
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="w-full flex items-center justify-center gap-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white px-10 py-5 rounded-[1.5rem] font-black text-xl transition-all shadow-2xl shadow-indigo-600/30 active:scale-95"
-          >
-            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
-            {isSubmitting ? 'Inatuma...' : (canPublish ? (profile.role === 'admin' ? 'Chapisha Hadithi' : 'Tuma Uhakiki') : 'Hifadhi kwenye Maktaba')}
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

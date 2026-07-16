@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, addDoc, onSnapshot, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, serverTimestamp, addDoc, onSnapshot, orderBy, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { BookOpen, Headphones, Search, Filter, X, Bookmark, BookmarkCheck, Loader2, MessageCircle, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../App';
 import StoryGenerator from '../components/StoryGenerator';
+import { locales } from '../locales';
 
 enum OperationType {
   CREATE = 'create',
@@ -23,13 +24,6 @@ interface FirestoreErrorInfo {
     email: string | null | undefined;
     emailVerified: boolean | undefined;
     isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
   }
 }
 
@@ -41,30 +35,20 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
       email: auth.currentUser?.email,
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
     },
     operationType,
     path
-  }
+  };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
 const GENRES = ['All', 'Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Education', 'Comedy', 'Horror', 'Poetry', 'Adventure'];
-const SORT_OPTIONS = [
-  { id: 'newest', label: 'Newest First' },
-  { id: 'oldest', label: 'Oldest First' },
-  { id: 'alphabetical', label: 'A-Z' }
-];
 
 export default function Home() {
-  const { user, profile } = useAuth();
+  const { user, profile, language } = useAuth();
+  const t = locales[language || 'sw'];
+
   const [stories, setStories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,6 +61,36 @@ export default function Home() {
   const [newComment, setNewComment] = useState('');
   const [postingComment, setPostingComment] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+
+  // Chapter and Progress tracking states
+  const [readingChapters, setReadingChapters] = useState<any[]>([]);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+
+  const [recentProgress, setRecentProgress] = useState<any[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+
+  useEffect(() => {
+    const fetchProgress = async () => {
+      if (!user) {
+        setRecentProgress([]);
+        return;
+      }
+      setLoadingProgress(true);
+      const path = `users/${user.uid}/readingProgress`;
+      try {
+        const q = query(collection(db, path), orderBy('updatedAt', 'desc'));
+        const snap = await getDocs(q);
+        setRecentProgress(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.warn("Could not fetch reading progress:", err);
+        setRecentProgress([]);
+      } finally {
+        setLoadingProgress(false);
+      }
+    };
+    fetchProgress();
+  }, [user, readingStory]);
 
   useEffect(() => {
     const fetchStories = async () => {
@@ -101,7 +115,7 @@ export default function Home() {
         const snapshot = await getDocs(collection(db, path));
         setSavedStoryIds(new Set(snapshot.docs.map(doc => doc.id)));
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, path);
+        console.warn("Could not fetch saved stories:", error);
       }
     };
 
@@ -109,11 +123,34 @@ export default function Home() {
     fetchSavedStories();
   }, [user]);
 
+  const saveReadingProgress = async (index: number, chaptersList: any[], story: any) => {
+    if (!user || !story || chaptersList.length === 0) return;
+    const progressPercent = Math.round(((index + 1) / chaptersList.length) * 100);
+    const chapter = chaptersList[index];
+    const path = `users/${user.uid}/readingProgress/${story.id}`;
+    try {
+      await setDoc(doc(db, path), {
+        storyId: story.id,
+        storyTitle: story.title,
+        lastReadChapterId: chapter.id,
+        lastReadChapterTitle: chapter.title,
+        lastReadChapterIndex: index,
+        percentage: progressPercent,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error saving reading progress:", error);
+    }
+  };
+
   const handleReadStory = async (story: any) => {
     setReadingStory(story);
     setLoadingComments(true);
     setComments([]);
-    
+    setReadingChapters([]);
+    setLoadingChapters(true);
+    setCurrentChapterIndex(0);
+
     // Setup real-time listener for comments
     const commentsPath = `stories/${story.id}/comments`;
     const q = query(collection(db, commentsPath), orderBy('createdAt', 'desc'));
@@ -130,6 +167,34 @@ export default function Home() {
       setLoadingComments(false);
     });
 
+    // Fetch chapters
+    const chaptersPath = `stories/${story.id}/chapters`;
+    try {
+      const qChapters = query(collection(db, chaptersPath), orderBy('order', 'asc'));
+      const chaptersSnap = await getDocs(qChapters);
+      const list = chaptersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReadingChapters(list);
+      
+      // Load saved reading progress for this story if logged in
+      if (user && list.length > 0) {
+        const progressPath = `users/${user.uid}/readingProgress/${story.id}`;
+        const progressDoc = await getDoc(doc(db, progressPath));
+        if (progressDoc.exists()) {
+          const data = progressDoc.data();
+          if (typeof data.lastReadChapterIndex === 'number' && data.lastReadChapterIndex < list.length) {
+            setCurrentChapterIndex(data.lastReadChapterIndex);
+          }
+        } else {
+          // Save initial progress
+          await saveReadingProgress(0, list, story);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading chapters:", error);
+    } finally {
+      setLoadingChapters(false);
+    }
+
     if (user) {
       const path = `users/${user.uid}/history/${story.id}`;
       try {
@@ -141,11 +206,32 @@ export default function Home() {
           viewedAt: serverTimestamp()
         });
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        console.warn("Could not save to history:", error);
       }
     }
 
     return unsubscribe;
+  };
+
+  const handleNextChapter = () => {
+    if (currentChapterIndex < readingChapters.length - 1) {
+      const nextIndex = currentChapterIndex + 1;
+      setCurrentChapterIndex(nextIndex);
+      saveReadingProgress(nextIndex, readingChapters, readingStory);
+    }
+  };
+
+  const handlePrevChapter = () => {
+    if (currentChapterIndex > 0) {
+      const prevIndex = currentChapterIndex - 1;
+      setCurrentChapterIndex(prevIndex);
+      saveReadingProgress(prevIndex, readingChapters, readingStory);
+    }
+  };
+
+  const handleSelectChapter = (index: number) => {
+    setCurrentChapterIndex(index);
+    saveReadingProgress(index, readingChapters, readingStory);
   };
 
   const handlePostComment = async (e: React.FormEvent) => {
@@ -160,7 +246,7 @@ export default function Home() {
         userName: profile?.displayName || 'User',
         text: newComment.trim(),
         createdAt: serverTimestamp(),
-        authorId: readingStory.authorId // Useful for notifications or filtering
+        authorId: readingStory.authorId
       });
       setNewComment('');
     } catch (error) {
@@ -172,7 +258,7 @@ export default function Home() {
 
   const handleDeleteComment = async (commentId: string) => {
     if (!readingStory) return;
-    if (!window.confirm("Je, una uhakika unataka kufuta maoni haya?")) return;
+    if (!window.confirm(language === 'sw' ? "Je, una uhakika unataka kufuta maoni haya?" : "Are you sure you want to delete this comment?")) return;
 
     const path = `stories/${readingStory.id}/comments/${commentId}`;
     try {
@@ -191,7 +277,6 @@ export default function Home() {
         ...story,
         savedAt: serverTimestamp()
       });
-      
       setSavedStoryIds(prev => new Set(prev).add(story.id));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -204,7 +289,7 @@ export default function Home() {
     .filter(story => {
       const matchesSearch = story.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             story.authorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            story.content.toLowerCase().includes(searchQuery.toLowerCase());
+                            (story.content && story.content.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesGenre = selectedGenre === 'All' || story.genre === selectedGenre;
       return matchesSearch && matchesGenre;
     })
@@ -226,11 +311,11 @@ export default function Home() {
           <div className="w-20 h-20 bg-white/10 backdrop-blur-xl rounded-[2.5rem] flex items-center justify-center mb-8 border border-white/20 shadow-inner">
             <BookOpen size={40} className="text-white" />
           </div>
-          <h1 className="text-5xl md:text-8xl font-black mb-8 leading-tight tracking-tighter shadow-sm">
-            Karibu Story Studio
+          <h1 className="text-5xl md:text-7xl font-black mb-8 leading-tight tracking-tighter shadow-sm">
+            {t.heroTitle}
           </h1>
           <p className="text-xl md:text-2xl text-indigo-100 max-w-2xl mx-auto mb-10 leading-relaxed font-bold opacity-90 italic">
-            Gundua, sikiliza, na jizamishe katika ulimwengu wa hadithi tamu kutoka kwa waandishi wetu mahiri.
+            {t.heroSubtitle}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <span className="bg-white/10 backdrop-blur-md px-6 py-2 rounded-full text-sm font-black uppercase tracking-widest border border-white/20">
@@ -249,13 +334,61 @@ export default function Home() {
       {/* AI Story Generator */}
       <StoryGenerator />
 
+      {/* Endelea Kusoma (Recently Read with progress) */}
+      {user && recentProgress.length > 0 && (
+        <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 animate-in fade-in duration-500">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md">
+              <BookOpen size={20} />
+            </div>
+            <h3 className="font-black text-slate-900 dark:text-white text-2xl">{t.continueReading}</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentProgress.slice(0, 3).map((prog) => {
+              const fullStory = stories.find(s => s.id === prog.storyId);
+              return (
+                <div key={prog.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-150 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-indigo-200 dark:hover:border-indigo-950 transition-colors">
+                  <div>
+                    <h4 className="font-black text-slate-900 dark:text-white text-lg line-clamp-1">{prog.storyTitle}</h4>
+                    <p className="text-xs text-slate-500 mt-1">{t.lastReadChapter}: <span className="font-bold text-slate-700 dark:text-slate-300">{prog.lastReadChapterTitle || `Sura ya ${prog.lastReadChapterIndex + 1}`}</span></p>
+                    
+                    {/* Progress bar */}
+                    <div className="mt-4 bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+                      <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${prog.percentage}%` }}></div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.progress}</span>
+                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{prog.percentage}%</span>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      if (fullStory) {
+                        handleReadStory(fullStory);
+                      } else {
+                        handleReadStory({ id: prog.storyId, title: prog.storyTitle, content: '' });
+                      }
+                    }}
+                    className="mt-5 w-full bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 font-black py-2.5 rounded-xl text-sm transition-all text-center"
+                  >
+                    {t.next}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filters and Search */}
       <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-800 transition-all">
         <div className="relative w-full lg:w-[32rem]">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={24} />
           <input 
             type="text" 
-            placeholder="Tafuta majina ya hadithi, waandishi, au maudhui..." 
+            placeholder={t.searchPlaceholder} 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-16 pr-6 py-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2rem] focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white transition-all text-lg font-bold placeholder:font-medium placeholder:text-slate-400"
@@ -269,7 +402,7 @@ export default function Home() {
               onChange={(e) => setSelectedGenre(e.target.value)}
               className="bg-transparent border-none outline-none text-sm font-black text-slate-600 dark:text-slate-300 px-6 py-2 cursor-pointer focus:ring-0 appearance-none"
             >
-              {GENRES.map(g => <option key={g} value={g} className="bg-white dark:bg-slate-900">{g === 'All' ? 'Aina Zote' : g}</option>)}
+              {GENRES.map(g => <option key={g} value={g} className="bg-white dark:bg-slate-900">{g === 'All' ? t.allGenres : g}</option>)}
             </select>
             <div className="w-px h-8 bg-slate-200 dark:bg-slate-700"></div>
             <select 
@@ -277,8 +410,8 @@ export default function Home() {
               onChange={(e) => setSortBy(e.target.value)}
               className="bg-transparent border-none outline-none text-sm font-black text-slate-600 dark:text-slate-300 px-6 py-2 cursor-pointer focus:ring-0 appearance-none"
             >
-              <option value="newest" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mpya Zaidi</option>
-              <option value="oldest" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Za Zamani</option>
+              <option value="newest" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{language === 'sw' ? 'Mpya Zaidi' : 'Newest'}</option>
+              <option value="oldest" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{language === 'sw' ? 'Za Zamani' : 'Oldest'}</option>
               <option value="alphabetical" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">A-Z</option>
             </select>
             <Filter size={18} className="mr-4 text-slate-400" />
@@ -290,7 +423,7 @@ export default function Home() {
       {filteredStories.length === 0 ? (
         <div className="text-center text-slate-500 dark:text-slate-400 py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 transition-colors">
           <BookOpen size={48} className="mx-auto text-slate-300 dark:text-slate-700 mb-4" />
-          <p className="text-lg font-medium">No stories found matching your criteria.</p>
+          <p className="text-lg font-medium">{t.noStoriesFound}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -321,7 +454,7 @@ export default function Home() {
                           ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' 
                           : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800'
                       }`}
-                      title={savedStoryIds.has(story.id) ? "Saved" : "Save for Later"}
+                      title={savedStoryIds.has(story.id) ? t.saved : t.savedStoriesBtn}
                     >
                       {savingId === story.id ? (
                         <Loader2 size={18} className="animate-spin" />
@@ -344,13 +477,13 @@ export default function Home() {
                     onClick={() => handleReadStory(story)}
                     className="flex-1 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-black py-4 px-6 rounded-[1.5rem] transition-all text-sm shadow-xl shadow-indigo-600/30 active:scale-95"
                   >
-                    Soma Hadithi
+                    {language === 'sw' ? 'Soma Hadithi' : 'Read Story'}
                   </button>
                   {story.audioUrl && (
                     <button 
                       onClick={() => handleReadStory(story)}
                       className="w-14 h-14 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-2xl transition-all flex items-center justify-center shadow-inner active:scale-95"
-                      title="Sikiliza Masimulizi"
+                      title={language === 'sw' ? 'Sikiliza Masimulizi' : 'Listen Narration'}
                     >
                       <Headphones size={24} />
                     </button>
@@ -385,17 +518,81 @@ export default function Home() {
               )}
               
               <div className="max-w-3xl mx-auto">
-                <div className="prose prose-indigo dark:prose-invert max-w-none mb-16 text-slate-800 dark:text-slate-200">
-                  {readingStory.content.split('\n').map((paragraph: string, i: number) => (
-                    <p key={i} className="mb-6 text-xl leading-relaxed font-serif">{paragraph}</p>
-                  ))}
-                </div>
+                {loadingChapters ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="animate-spin text-indigo-600 mb-2" size={32} />
+                    <p className="text-slate-500 font-bold text-sm">{t.loading}</p>
+                  </div>
+                ) : readingChapters.length > 0 ? (
+                  <div className="animate-in fade-in duration-300">
+                    {/* Chapter selector */}
+                    <div className="mb-6 flex flex-col sm:flex-row items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 gap-4 shadow-sm">
+                      <div className="text-sm font-black text-slate-600 dark:text-slate-400">
+                        {t.chapterTitleLabel} <span className="text-indigo-600 font-black">{currentChapterIndex + 1}</span> kati ya <span className="text-slate-800 dark:text-white">{readingChapters.length}</span>
+                      </div>
+                      <select
+                        value={currentChapterIndex}
+                        onChange={(e) => handleSelectChapter(Number(e.target.value))}
+                        className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-black dark:text-white outline-none cursor-pointer"
+                      >
+                        {readingChapters.map((chap, idx) => (
+                          <option key={chap.id} value={idx}>{t.chapterTitleLabel} {chap.order}: {chap.title}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-8 bg-slate-200 dark:bg-slate-850 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+                      <div 
+                        className="bg-indigo-600 h-full transition-all duration-500 rounded-full"
+                        style={{ width: `${Math.round(((currentChapterIndex + 1) / readingChapters.length) * 100)}%` }}
+                      ></div>
+                    </div>
+
+                    <div className="prose prose-indigo dark:prose-invert max-w-none mb-12 text-slate-800 dark:text-slate-200">
+                      <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-6 font-sans">
+                        {t.chapterTitleLabel} {readingChapters[currentChapterIndex].order}: {readingChapters[currentChapterIndex].title}
+                      </h3>
+                      {readingChapters[currentChapterIndex].content.split('\n').map((paragraph: string, i: number) => (
+                        <p key={i} className="mb-6 text-xl leading-relaxed font-serif">{paragraph}</p>
+                      ))}
+                    </div>
+
+                    {/* Navigation */}
+                    <div className="mb-16 flex items-center justify-between border-t border-b border-slate-150 dark:border-slate-800 py-6">
+                      <button
+                        onClick={handlePrevChapter}
+                        disabled={currentChapterIndex === 0}
+                        className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 disabled:opacity-40 rounded-xl text-sm font-black text-slate-700 dark:text-slate-300 transition-all cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        ← {t.prevChapter}
+                      </button>
+                      <div className="text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                        {t.chapterTitleLabel} {currentChapterIndex + 1} ({Math.round(((currentChapterIndex + 1) / readingChapters.length) * 100)}% {t.completionPercentage})
+                      </div>
+                      <button
+                        onClick={handleNextChapter}
+                        disabled={currentChapterIndex === readingChapters.length - 1}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-black text-white transition-all cursor-pointer shadow-md shadow-indigo-600/20 disabled:cursor-not-allowed"
+                      >
+                        {t.nextChapter} →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Fallback for old single-document stories to maintain backwards compatibility */
+                  <div className="prose prose-indigo dark:prose-invert max-w-none mb-16 text-slate-800 dark:text-slate-200">
+                    {readingStory.content && readingStory.content.split('\n').map((paragraph: string, i: number) => (
+                      <p key={i} className="mb-6 text-xl leading-relaxed font-serif">{paragraph}</p>
+                    ))}
+                  </div>
+                )}
 
                 {/* Comments Section */}
                 <div className="mt-20 pt-12 border-t border-slate-200 dark:border-slate-800">
                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 flex items-center gap-3">
                     <MessageCircle className="text-indigo-600 dark:text-indigo-400" size={28} />
-                    Maoni ya Wasomaji ({comments.length})
+                    {t.commentsSection} ({comments.length})
                   </h3>
 
                   {user ? (
@@ -403,7 +600,7 @@ export default function Home() {
                       <textarea 
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Andika maoni yako hapa..."
+                        placeholder={t.addCommentPlaceholder}
                         className="w-full p-5 pr-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-32 shadow-sm dark:text-white transition-all text-lg"
                         required
                       />
@@ -429,7 +626,7 @@ export default function Home() {
                     ) : comments.length === 0 ? (
                       <div className="text-center py-12 text-slate-400 dark:text-slate-600 flex flex-col items-center gap-3">
                         <MessageCircle size={48} className="opacity-20" />
-                        <p className="italic text-lg">Hakuna maoni bado. Kuwa wa kwanza kutoa maoni!</p>
+                        <p className="italic text-lg">{t.noCommentsYet}</p>
                       </div>
                     ) : (
                       comments.map((comment) => (

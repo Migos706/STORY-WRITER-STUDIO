@@ -10,6 +10,16 @@
         "displayName": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "author", "user"] },
         "authorStatus": { "type": "string", "enum": ["none", "pending", "approved"] },
+        "subscription": { "type": "string", "enum": ["free", "premium"] },
+        "audioPreferences": {
+          "type": "object",
+          "properties": {
+            "voiceId": { "type": "string" },
+            "speed": { "type": "number" },
+            "autoScroll": { "type": "boolean" },
+            "sleepTimer": { "type": "number" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role", "authorStatus"]
@@ -22,30 +32,184 @@
         "authorId": { "type": "string" },
         "authorName": { "type": "string" },
         "title": { "type": "string" },
-        "content": { "type": "string" },
+        "content": { "type": "string", "description": "Introductory or legacy content of the story." },
         "genre": { "type": "string" },
         "mood": { "type": "string" },
         "imageUrl": { "type": "string" },
         "audioUrl": { "type": "string" },
         "status": { "type": "string", "enum": ["draft", "pending", "approved", "rejected"] },
         "safetyStatus": { "type": "string", "enum": ["unchecked", "safe", "flagged"] },
+        "safetyReason": { "type": "string" },
+        "viewsCount": { "type": "integer" },
+        "likesCount": { "type": "integer" },
+        "ratingCount": { "type": "integer" },
+        "averageRating": { "type": "number" },
+        "isPremiumOnly": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["authorId", "authorName", "title", "content", "status", "safetyStatus"]
+      "required": ["authorId", "authorName", "title", "status", "safetyStatus"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "A single chapter in a story.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storyId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "order": { "type": "integer" },
+        "imageUrl": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storyId", "title", "content", "order"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A reader comment or reply on a story.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "parentId": { "type": "string", "description": "UID of the parent comment, if this is a reply." },
+        "reportCount": { "type": "integer" },
+        "isReported": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "text"]
+    },
+    "Rating": {
+      "title": "Rating",
+      "description": "A star rating provided by a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "rating"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "A like record on a story.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId"]
+    },
+    "ReadingProgress": {
+      "title": "ReadingProgress",
+      "description": "A tracker for the reading progress of a user on a story.",
+      "type": "object",
+      "properties": {
+        "storyId": { "type": "string" },
+        "storyTitle": { "type": "string" },
+        "authorName": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "lastReadChapterId": { "type": "string" },
+        "lastReadChapterTitle": { "type": "string" },
+        "lastReadPosition": { "type": "number" },
+        "progressPercentage": { "type": "number" },
+        "viewedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storyId", "viewedAt"]
+    },
+    "Character": {
+      "title": "Character",
+      "description": "An AI-generated character designed by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "personality": { "type": "string" },
+        "abilities": { "type": "string" },
+        "genre": { "type": "string" },
+        "bio": { "type": "string" },
+        "background": { "type": "string" },
+        "imagePrompt": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification sent to a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "message", "type", "isRead"]
+    },
+    "History": {
+      "title": "History",
+      "description": "A history record of a story viewed by the user.",
+      "type": "object",
+      "properties": {
+        "storyId": { "type": "string" },
+        "title": { "type": "string" },
+        "viewedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storyId"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
-      "description": "Stores user profiles and roles."
+      "description": "Stores user profiles, roles, subscriptions, and preferences."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Stores notifications sent to the user."
+    },
+    "/users/{userId}/readingProgress/{storyId}": {
+      "schema": { "$ref": "#/entities/ReadingProgress" },
+      "description": "Tracks reading percentage and positions per story."
+    },
+    "/users/{userId}/characters/{characterId}": {
+      "schema": { "$ref": "#/entities/Character" },
+      "description": "Tracks AI-generated characters created by the user."
     },
     "/stories/{storyId}": {
       "schema": { "$ref": "#/entities/Story" },
       "description": "Stores stories created by authors."
     },
+    "/stories/{storyId}/chapters/{chapterId}": {
+      "schema": { "$ref": "#/entities/Chapter" },
+      "description": "Stores chapters belonging to a story."
+    },
+    "/stories/{storyId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Stores comments and comment-replies under stories."
+    },
+    "/stories/{storyId}/ratings/{userId}": {
+      "schema": { "$ref": "#/entities/Rating" },
+      "description": "Stores individual user star ratings."
+    },
+    "/stories/{storyId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Tracks which users liked the story."
+    },
     "/users/{userId}/savedStories/{storyId}": {
       "schema": { "$ref": "#/entities/Story" },
       "description": "Stories saved by the user for later reading."
+    },
+    "/users/{userId}/history/{storyId}": {
+      "schema": { "$ref": "#/entities/History" },
+      "description": "Tracks stories viewed by the user."
     }
   }
 }
